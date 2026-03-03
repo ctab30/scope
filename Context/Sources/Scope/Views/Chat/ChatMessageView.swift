@@ -1,0 +1,391 @@
+import SwiftUI
+
+struct ChatMessageView: View {
+    let message: ChatMessage
+    let projectId: String?
+    let onCreateTask: (String) -> Void
+    let onAddToNotes: (String) -> Void
+    let onSendToTerminal: (String) -> Void
+
+    @State private var isHovering = false
+    @State private var showCopied = false
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 8) {
+            if message.role == "user" {
+                Spacer(minLength: 60)
+                userBubble
+            } else {
+                assistantBubble
+                Spacer(minLength: 60)
+            }
+        }
+    }
+
+    // MARK: - User Bubble
+
+    private var userBubble: some View {
+        VStack(alignment: .trailing, spacing: 2) {
+            Text(message.content)
+                .font(.system(size: 12))
+                .foregroundColor(.white)
+                .textSelection(.enabled)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(Color.accentColor)
+                )
+
+            Text(message.createdAt.formatted(.dateTime.hour().minute()))
+                .font(.system(size: 9))
+                .foregroundStyle(.quaternary)
+        }
+    }
+
+    // MARK: - Assistant Bubble
+
+    private var assistantBubble: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            MarkdownContentView(content: message.content)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(Color(nsColor: .windowBackgroundColor))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .stroke(Color(nsColor: .separatorColor).opacity(0.4), lineWidth: 0.5)
+                )
+
+            // Action buttons — show on hover
+            if isHovering {
+                HStack(spacing: 2) {
+                    actionButton("Create Task", icon: "checklist") {
+                        onCreateTask(message.content)
+                    }
+                    actionButton("Add to Notes", icon: "note.text.badge.plus") {
+                        onAddToNotes(message.content)
+                    }
+                    actionButton(showCopied ? "Copied!" : "Copy", icon: "doc.on.doc") {
+                        NSPasteboard.general.clearContents()
+                        NSPasteboard.general.setString(message.content, forType: .string)
+                        showCopied = true
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+                            showCopied = false
+                        }
+                    }
+                    actionButton("To Terminal", icon: "terminal") {
+                        onSendToTerminal(message.content)
+                    }
+                }
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+
+            Text(message.createdAt.formatted(.dateTime.hour().minute()))
+                .font(.system(size: 9))
+                .foregroundStyle(.quaternary)
+        }
+        .onHover { hovering in
+            withAnimation(.easeInOut(duration: 0.15)) {
+                isHovering = hovering
+            }
+        }
+    }
+
+    // MARK: - Action Button
+
+    private func actionButton(_ label: String, icon: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 3) {
+                Image(systemName: icon)
+                    .font(.system(size: 8))
+                Text(label)
+                    .font(.system(size: 9, weight: .medium))
+            }
+            .padding(.horizontal, 6)
+            .padding(.vertical, 3)
+            .background(
+                RoundedRectangle(cornerRadius: 4)
+                    .fill(Color(nsColor: .controlBackgroundColor))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 4)
+                    .stroke(Color(nsColor: .separatorColor).opacity(0.3), lineWidth: 0.5)
+            )
+        }
+        .buttonStyle(.plain)
+        .foregroundColor(.secondary)
+    }
+}
+
+// MARK: - Markdown Content View
+
+/// Parses markdown into block-level elements and renders each with proper styling.
+private struct MarkdownContentView: View {
+    let content: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            ForEach(Array(parseBlocks().enumerated()), id: \.offset) { _, block in
+                blockView(block)
+            }
+        }
+        .textSelection(.enabled)
+    }
+
+    // MARK: - Block Types
+
+    private enum Block {
+        case heading(level: Int, text: String)
+        case paragraph(text: String)
+        case listItem(text: String)
+        case numberedItem(number: String, text: String)
+        case blockquote(text: String)
+        case codeBlock(code: String, language: String?)
+        case divider
+    }
+
+    // MARK: - Parser
+
+    private func parseBlocks() -> [Block] {
+        var blocks: [Block] = []
+        let lines = content.components(separatedBy: "\n")
+        var i = 0
+
+        while i < lines.count {
+            let line = lines[i]
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+
+            // Code block (fenced)
+            if trimmed.hasPrefix("```") {
+                let language = String(trimmed.dropFirst(3)).trimmingCharacters(in: .whitespaces)
+                var codeLines: [String] = []
+                i += 1
+                while i < lines.count {
+                    if lines[i].trimmingCharacters(in: .whitespaces).hasPrefix("```") {
+                        i += 1
+                        break
+                    }
+                    codeLines.append(lines[i])
+                    i += 1
+                }
+                blocks.append(.codeBlock(
+                    code: codeLines.joined(separator: "\n"),
+                    language: language.isEmpty ? nil : language
+                ))
+                continue
+            }
+
+            // Horizontal rule
+            if trimmed == "---" || trimmed == "***" || trimmed == "___" {
+                blocks.append(.divider)
+                i += 1
+                continue
+            }
+
+            // Heading
+            if trimmed.hasPrefix("#") {
+                let level = trimmed.prefix(while: { $0 == "#" }).count
+                if level <= 6 {
+                    let text = String(trimmed.dropFirst(level)).trimmingCharacters(in: .whitespaces)
+                    blocks.append(.heading(level: level, text: text))
+                    i += 1
+                    continue
+                }
+            }
+
+            // Blockquote
+            if trimmed.hasPrefix("> ") || trimmed == ">" {
+                var quoteLines: [String] = []
+                while i < lines.count {
+                    let l = lines[i].trimmingCharacters(in: .whitespaces)
+                    if l.hasPrefix("> ") {
+                        quoteLines.append(String(l.dropFirst(2)))
+                    } else if l == ">" {
+                        quoteLines.append("")
+                    } else {
+                        break
+                    }
+                    i += 1
+                }
+                blocks.append(.blockquote(text: quoteLines.joined(separator: "\n")))
+                continue
+            }
+
+            // Unordered list item
+            if trimmed.hasPrefix("- ") || trimmed.hasPrefix("* ") || trimmed.hasPrefix("+ ") {
+                let text = String(trimmed.dropFirst(2))
+                blocks.append(.listItem(text: text))
+                i += 1
+                continue
+            }
+
+            // Numbered list item
+            if let match = trimmed.range(of: #"^\d+[\.\)]\s"#, options: .regularExpression) {
+                let prefix = String(trimmed[match])
+                let number = prefix.trimmingCharacters(in: .whitespaces).trimmingCharacters(in: CharacterSet(charactersIn: ".)"))
+                let text = String(trimmed[match.upperBound...])
+                blocks.append(.numberedItem(number: number, text: text))
+                i += 1
+                continue
+            }
+
+            // Empty line — skip
+            if trimmed.isEmpty {
+                i += 1
+                continue
+            }
+
+            // Paragraph — collect consecutive non-special lines
+            var paraLines: [String] = []
+            while i < lines.count {
+                let l = lines[i].trimmingCharacters(in: .whitespaces)
+                if l.isEmpty || l.hasPrefix("#") || l.hasPrefix("```") || l.hasPrefix("> ")
+                    || l.hasPrefix("- ") || l.hasPrefix("* ") || l.hasPrefix("+ ")
+                    || l == "---" || l == "***" || l == "___" {
+                    break
+                }
+                if let _ = l.range(of: #"^\d+[\.\)]\s"#, options: .regularExpression) {
+                    break
+                }
+                paraLines.append(lines[i])
+                i += 1
+            }
+            if !paraLines.isEmpty {
+                blocks.append(.paragraph(text: paraLines.joined(separator: " ")))
+            }
+        }
+
+        return blocks
+    }
+
+    // MARK: - Block Rendering
+
+    @ViewBuilder
+    private func blockView(_ block: Block) -> some View {
+        switch block {
+        case .heading(let level, let text):
+            inlineText(text)
+                .font(.system(size: headingSize(level), weight: .semibold))
+                .padding(.top, level <= 2 ? 4 : 2)
+
+        case .paragraph(let text):
+            inlineText(text)
+                .font(.system(size: 12))
+
+        case .listItem(let text):
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Text("\u{2022}")
+                    .font(.system(size: 12))
+                    .foregroundColor(.secondary)
+                inlineText(text)
+                    .font(.system(size: 12))
+            }
+            .padding(.leading, 4)
+
+        case .numberedItem(let number, let text):
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Text("\(number).")
+                    .font(.system(size: 12))
+                    .foregroundColor(.secondary)
+                    .frame(minWidth: 16, alignment: .trailing)
+                inlineText(text)
+                    .font(.system(size: 12))
+            }
+            .padding(.leading, 4)
+
+        case .blockquote(let text):
+            HStack(spacing: 0) {
+                RoundedRectangle(cornerRadius: 1)
+                    .fill(Color.accentColor.opacity(0.5))
+                    .frame(width: 3)
+                inlineText(text)
+                    .font(.system(size: 12))
+                    .italic()
+                    .foregroundStyle(.secondary)
+                    .padding(.leading, 8)
+            }
+            .padding(.vertical, 2)
+
+        case .codeBlock(let code, _):
+            Text(code)
+                .font(.system(size: 11, design: .monospaced))
+                .padding(8)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(Color(nsColor: .textBackgroundColor).opacity(0.5))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 6)
+                        .stroke(Color(nsColor: .separatorColor).opacity(0.3), lineWidth: 0.5)
+                )
+                .textSelection(.enabled)
+
+        case .divider:
+            Divider()
+                .padding(.vertical, 2)
+        }
+    }
+
+    private func headingSize(_ level: Int) -> CGFloat {
+        switch level {
+        case 1: return 16
+        case 2: return 14
+        case 3: return 13
+        default: return 12
+        }
+    }
+
+    // MARK: - Inline Markdown Rendering
+
+    /// Renders inline markdown: **bold**, *italic*, `code`, [links](url)
+    private func inlineText(_ text: String) -> Text {
+        var result = Text("")
+        var remaining = text[text.startIndex...]
+
+        while !remaining.isEmpty {
+            // Bold: **text**
+            if remaining.hasPrefix("**"),
+               let endRange = remaining[remaining.index(remaining.startIndex, offsetBy: 2)...]
+                .range(of: "**") {
+                let inner = remaining[remaining.index(remaining.startIndex, offsetBy: 2)..<endRange.lowerBound]
+                result = result + Text(inner).bold()
+                remaining = remaining[endRange.upperBound...]
+                continue
+            }
+
+            // Inline code: `code`
+            if remaining.hasPrefix("`"),
+               let endIdx = remaining[remaining.index(after: remaining.startIndex)...]
+                .firstIndex(of: "`") {
+                let inner = remaining[remaining.index(after: remaining.startIndex)..<endIdx]
+                result = result + Text(inner)
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundColor(Color(nsColor: .systemOrange))
+                remaining = remaining[remaining.index(after: endIdx)...]
+                continue
+            }
+
+            // Italic: *text* (but not **)
+            if remaining.hasPrefix("*") && !remaining.hasPrefix("**"),
+               let endIdx = remaining[remaining.index(after: remaining.startIndex)...]
+                .firstIndex(of: "*") {
+                let inner = remaining[remaining.index(after: remaining.startIndex)..<endIdx]
+                result = result + Text(inner).italic()
+                remaining = remaining[remaining.index(after: endIdx)...]
+                continue
+            }
+
+            // Plain character
+            let nextSpecial = remaining.dropFirst().firstIndex(where: { $0 == "*" || $0 == "`" })
+                ?? remaining.endIndex
+            result = result + Text(remaining[remaining.startIndex..<nextSpecial])
+            remaining = remaining[nextSpecial...]
+        }
+
+        return result
+    }
+}

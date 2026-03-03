@@ -1,0 +1,872 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Scope — Persistent Memory for AI Coding Agents</title>
+  <meta name="description" content="Your AI coding agent forgets everything between sessions. Scope fixes that. Session memory, task tracking, and project intelligence for Claude Code, Gemini CLI, Codex CLI, and OpenCode.">
+  <meta name="theme-color" content="#050505">
+  <link rel="icon" type="image/svg+xml" href="scope-logo.svg">
+
+  <!-- Open Graph -->
+  <meta property="og:title" content="Scope — Persistent Memory for AI Coding Agents">
+  <meta property="og:description" content="Your AI coding agent forgets everything between sessions. Scope fixes that.">
+  <meta property="og:type" content="website">
+  <meta property="og:image" content="https://scope.app/scope-logo.png">
+  <meta name="twitter:card" content="summary">
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Figtree:wght@300;400;500;600;700;800&family=Instrument+Serif:ital@1&display=swap" rel="stylesheet">
+
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <!-- Tailwind -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            fire: {
+              50: '#fff7ed', 100: '#ffedd5', 200: '#fed7aa', 300: '#fdba74',
+              400: '#fb923c', 500: '#f97316', 600: '#ea580c', 700: '#c2410c',
+              800: '#9a3412', 900: '#7c2d12',
+            },
+            surface: {
+              DEFAULT: '#0a0a0a', 50: '#111111', 100: '#161616',
+              200: '#1a1a1a', 300: '#262626', 400: '#333333',
+            }
+          },
+          fontFamily: {
+            sans: ['Figtree', 'system-ui', 'sans-serif'],
+            serif: ['"Instrument Serif"', 'Georgia', 'serif'],
+            mono: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'Monaco', 'Consolas', 'monospace'],
+          },
+          animation: {
+            'fade-in': 'fadeIn 0.9s ease-out forwards',
+            'fade-in-up': 'fadeInUp 0.9s ease-out forwards',
+            'glow-pulse': 'glowPulse 4s ease-in-out infinite',
+          },
+          keyframes: {
+            fadeIn: { '0%': { opacity: '0' }, '100%': { opacity: '1' } },
+            fadeInUp: { '0%': { opacity: '0', transform: 'translateY(28px)' }, '100%': { opacity: '1', transform: 'translateY(0)' } },
+            glowPulse: { '0%, 100%': { opacity: '0.35' }, '50%': { opacity: '0.7' } },
+          },
+        }
+      }
+    }
+  </script>
+  <style>
+    body { background: #050505; }
+
+    /* Film grain overlay */
+    body::after {
+      content: '';
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
+      pointer-events: none;
+      opacity: 0.018;
+      background: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+      background-size: 200px 200px;
+    }
+
+    /* Scroll-triggered reveal */
+    .reveal {
+      opacity: 0;
+      transform: translateY(28px);
+      transition: opacity 0.7s ease-out, transform 0.7s ease-out;
+    }
+    .reveal.visible { opacity: 1; transform: translateY(0); }
+
+    /* Fire gradient text */
+    .text-fire-gradient {
+      background: linear-gradient(135deg, #f97316 0%, #fb923c 40%, #fbbf24 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    /* Subtle grid */
+    .bg-grid {
+      background-image:
+        linear-gradient(rgba(255,255,255,0.015) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,0.015) 1px, transparent 1px);
+      background-size: 72px 72px;
+    }
+
+    /* Hero glow */
+    .hero-glow {
+      position: absolute;
+      width: 700px;
+      height: 700px;
+      background: radial-gradient(circle, rgba(249,115,22,0.1) 0%, transparent 65%);
+      top: 40%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+    }
+
+    /* Nav scroll state */
+    .nav-scrolled {
+      background: rgba(5,5,5,0.85);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+    }
+
+    /* Terminal mockup */
+    .terminal-window {
+      border-radius: 12px;
+      overflow: hidden;
+      border: 1px solid #1a1a1a;
+      background: #0a0a0a;
+    }
+    .terminal-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 16px;
+      background: #0f0f0f;
+      border-bottom: 1px solid #1a1a1a;
+    }
+    .terminal-body {
+      padding: 20px 24px;
+      font-size: 13px;
+      line-height: 1.75;
+    }
+
+    /* Collapsible chevron */
+    details summary { cursor: pointer; list-style: none; }
+    details summary::-webkit-details-marker { display: none; }
+    details[open] summary .chevron-icon { transform: rotate(90deg); }
+    .chevron-icon { transition: transform 0.2s ease; }
+
+    /* Section divider */
+    .section-divider {
+      height: 1px;
+      background: linear-gradient(90deg, transparent 0%, rgba(249,115,22,0.2) 50%, transparent 100%);
+    }
+
+    /* CLI button hover */
+    .cli-btn { transition: all 0.2s ease; }
+    .cli-btn:hover { box-shadow: 0 0 24px rgba(249,115,22,0.2); }
+
+    /* Feature card gradient border on hover */
+    .feature-card {
+      position: relative;
+      transition: border-color 0.3s ease;
+    }
+    .feature-card:hover { border-color: #333; }
+
+    /* Code block */
+    .code-block {
+      background: #0a0a0a;
+      border: 1px solid #1a1a1a;
+      border-radius: 8px;
+      overflow-x: auto;
+    }
+  </style>
+</head>
+<body class="text-gray-300 antialiased font-sans">
+
+  <!-- ============================================ -->
+  <!-- NAV                                          -->
+  <!-- ============================================ -->
+  <nav id="nav" class="fixed top-0 inset-x-0 z-50 transition-all duration-300">
+    <div class="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
+      <a href="#" class="flex items-center gap-2.5 group">
+        <img src="scope-logo.svg" alt="" class="h-7 transition-transform group-hover:scale-105">
+        <span class="text-white font-semibold tracking-tight">Scope</span>
+      </a>
+      <div class="flex items-center gap-6">
+        <a href="#features" class="hidden sm:block text-sm text-gray-500 hover:text-white transition-colors">Features</a>
+        <a href="#setup" class="hidden sm:block text-sm text-gray-500 hover:text-white transition-colors">Setup</a>
+        <a href="https://github.com/ctab30/scope" target="_blank" rel="noopener"
+           class="text-gray-500 hover:text-white transition-colors" aria-label="GitHub">
+          <i data-lucide="github" class="w-5 h-5"></i>
+        </a>
+        <a href="https://github.com/ctab30/scope/releases/latest"
+           class="hidden sm:inline-flex items-center gap-2 bg-fire-500 hover:bg-fire-600 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors">
+          <i data-lucide="download" class="w-4 h-4"></i>
+          Download
+        </a>
+      </div>
+    </div>
+  </nav>
+
+
+  <!-- ============================================ -->
+  <!-- HERO                                         -->
+  <!-- ============================================ -->
+  <section class="relative overflow-hidden pt-16">
+    <div class="absolute inset-0 bg-grid"></div>
+    <div class="hero-glow animate-glow-pulse"></div>
+
+    <div class="relative z-10 pt-20 md:pt-28 pb-16">
+      <div class="max-w-3xl mx-auto px-6 text-center">
+        <div class="animate-fade-in mb-10">
+          <img src="scope-logo.svg" alt="Scope" class="h-24 md:h-36 mx-auto drop-shadow-[0_0_50px_rgba(249,115,22,0.3)]">
+        </div>
+
+        <h1 class="animate-fade-in text-5xl md:text-7xl font-extrabold tracking-tight text-white mb-8">
+          <span class="text-fire-gradient">Scope</span>
+        </h1>
+
+        <p class="animate-fade-in-up font-serif italic text-2xl md:text-[2rem] text-gray-100 mb-6 leading-snug" style="animation-delay:0.1s">
+          Your AI agent forgets everything between sessions.
+        </p>
+
+        <p class="animate-fade-in-up text-lg text-gray-400 max-w-xl mx-auto mb-14 leading-relaxed" style="animation-delay:0.2s">
+          Scope gives AI coding tools persistent memory, task tracking, and project intelligence. A native macOS companion for the AI-native workflow.
+        </p>
+
+        <div class="animate-fade-in-up flex flex-col sm:flex-row items-center justify-center gap-4" style="animation-delay:0.35s">
+          <a href="https://github.com/ctab30/scope/releases/latest"
+             class="inline-flex items-center gap-2.5 bg-fire-500 hover:bg-fire-600 text-white font-semibold px-8 py-3.5 rounded-xl transition-all hover:shadow-lg hover:shadow-fire-500/25 text-base">
+            <i data-lucide="download" class="w-5 h-5"></i>
+            Download for macOS
+          </a>
+          <a href="https://github.com/ctab30/scope" target="_blank" rel="noopener"
+             class="inline-flex items-center gap-2.5 border border-gray-700 hover:border-gray-500 text-gray-200 font-medium px-8 py-3.5 rounded-xl transition-all hover:bg-white/[0.03] text-base">
+            <i data-lucide="github" class="w-5 h-5"></i>
+            View on GitHub
+          </a>
+        </div>
+
+        <p class="animate-fade-in-up text-xs text-gray-600 mt-6" style="animation-delay:0.45s">
+          Works with Claude Code, Gemini CLI, Codex CLI, and OpenCode
+        </p>
+      </div>
+
+      <!-- Hero Screenshot -->
+      <div class="animate-fade-in-up max-w-6xl mx-auto px-6 mt-16" style="animation-delay:0.55s">
+        <img src="assets/screenshot-01.png" alt="Scope — Planner view with Kanban board, task tracking, and project intelligence" class="w-full" loading="eager">
+      </div>
+    </div>
+  </section>
+
+
+  <!-- ============================================ -->
+  <!-- THE PROBLEM                                  -->
+  <!-- ============================================ -->
+  <section class="py-28 md:py-36">
+    <div class="max-w-5xl mx-auto px-6">
+      <div class="text-center mb-16 reveal">
+        <p class="text-fire-400 font-medium text-sm uppercase tracking-widest mb-4">The problem</p>
+        <h2 class="text-3xl md:text-5xl font-bold text-white mb-6 leading-tight">
+          Every session starts from scratch
+        </h2>
+        <p class="text-gray-400 text-lg max-w-2xl mx-auto leading-relaxed">
+          You spend the first five minutes of every AI session re-explaining context. What you were working on. What files are involved. What decisions you already made. Your agent has no idea.
+        </p>
+      </div>
+
+      <!-- Terminal comparison -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 reveal" style="transition-delay: 150ms">
+        <!-- Without -->
+        <div>
+          <div class="flex items-center gap-2 mb-3">
+            <i data-lucide="x" class="w-4 h-4 text-red-400"></i>
+            <span class="text-sm font-medium text-red-400">Without Scope</span>
+          </div>
+          <div class="terminal-window">
+            <div class="terminal-header">
+              <div class="flex gap-1.5">
+                <span class="w-3 h-3 rounded-full bg-[#ff5f57]"></span>
+                <span class="w-3 h-3 rounded-full bg-[#febc2e]"></span>
+                <span class="w-3 h-3 rounded-full bg-[#28c840]"></span>
+              </div>
+              <span class="text-[11px] text-gray-600 font-mono">Terminal</span>
+            </div>
+            <div class="terminal-body font-mono text-gray-400">
+              <p><span class="text-gray-600">$</span> <span class="text-fire-400">claude</span></p>
+              <p class="mt-3"><span class="text-gray-500">You:</span> <span class="text-gray-300">Pick up where we left off on the auth refactor</span></p>
+              <p class="mt-3"><span class="text-gray-500">Claude:</span> I don't have context about a previous session or auth refactor. Could you tell me:</p>
+              <p class="text-gray-500 ml-4">- Which files are involved?</p>
+              <p class="text-gray-500 ml-4">- What changes have been made?</p>
+              <p class="text-gray-500 ml-4">- What's the desired end state?</p>
+              <p class="mt-2 text-gray-600 text-xs">// 5 minutes of re-explaining later...</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- With -->
+        <div>
+          <div class="flex items-center gap-2 mb-3">
+            <i data-lucide="check" class="w-4 h-4 text-emerald-400"></i>
+            <span class="text-sm font-medium text-emerald-400">With Scope</span>
+          </div>
+          <div class="terminal-window" style="border-color: rgba(16,185,129,0.15)">
+            <div class="terminal-header">
+              <div class="flex gap-1.5">
+                <span class="w-3 h-3 rounded-full bg-[#ff5f57]"></span>
+                <span class="w-3 h-3 rounded-full bg-[#febc2e]"></span>
+                <span class="w-3 h-3 rounded-full bg-[#28c840]"></span>
+              </div>
+              <span class="text-[11px] text-gray-600 font-mono">Terminal</span>
+            </div>
+            <div class="terminal-body font-mono text-gray-400">
+              <p><span class="text-gray-600">$</span> <span class="text-fire-400">claude</span></p>
+              <p class="mt-3"><span class="text-gray-500">You:</span> <span class="text-gray-300">Pick up where we left off on the auth refactor</span></p>
+              <p class="mt-3"><span class="text-gray-500">Claude:</span> <span class="text-gray-300">Resuming auth refactor from your last session:</span></p>
+              <p class="mt-1"><span class="text-emerald-400 ml-4">&#10003;</span> Migrated to JWT tokens <span class="text-gray-600">(src/auth/jwt.ts)</span></p>
+              <p><span class="text-emerald-400 ml-4">&#10003;</span> Updated 3 of 7 route handlers</p>
+              <p><span class="text-fire-400 ml-4">&#8594;</span> Remaining: payments, webhooks, admin</p>
+              <p><span class="text-amber-400 ml-4">!</span> Note: Rate limiter needs JWT update too</p>
+              <p class="mt-2 text-gray-300">Continuing with the payments handler.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+
+  <div class="section-divider max-w-xl mx-auto"></div>
+
+
+  <!-- ============================================ -->
+  <!-- FEATURES                                     -->
+  <!-- ============================================ -->
+  <section id="features" class="py-28 md:py-36">
+    <div class="max-w-6xl mx-auto px-6">
+      <div class="text-center mb-20 reveal">
+        <p class="text-fire-400 font-medium text-sm uppercase tracking-widest mb-4">Features</p>
+        <h2 class="text-3xl md:text-5xl font-bold text-white mb-6">
+          Built for the AI-native workflow
+        </h2>
+        <p class="text-gray-400 text-lg max-w-2xl mx-auto">
+          A native macOS app that sits alongside your terminal, giving your AI agent the context and tools it needs to be genuinely useful.
+        </p>
+      </div>
+
+      <!-- Hero features — 3 larger cards -->
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+        <div class="reveal feature-card bg-surface-50 border border-surface-200 rounded-2xl p-8" style="transition-delay:0ms">
+          <div class="w-10 h-10 rounded-lg bg-fire-500/10 flex items-center justify-center mb-5">
+            <i data-lucide="brain" class="w-5 h-5 text-fire-400"></i>
+          </div>
+          <h3 class="text-white font-semibold text-lg mb-3">Persistent Memory</h3>
+          <p class="text-gray-400 text-sm leading-relaxed">
+            Tasks, notes, and session context that survive across sessions. Your AI picks up exactly where the last conversation ended — no re-explaining required.
+          </p>
+        </div>
+
+        <div class="reveal feature-card bg-surface-50 border border-surface-200 rounded-2xl p-8" style="transition-delay:80ms">
+          <div class="w-10 h-10 rounded-lg bg-fire-500/10 flex items-center justify-center mb-5">
+            <i data-lucide="terminal" class="w-5 h-5 text-fire-400"></i>
+          </div>
+          <h3 class="text-white font-semibold text-lg mb-3">Integrated Tooling</h3>
+          <p class="text-gray-400 text-sm leading-relaxed">
+            Built-in terminal, browser automation, and semantic code search. Your agent can run commands, navigate the web, and search your codebase by meaning — all through MCP.
+          </p>
+        </div>
+
+        <div class="reveal feature-card bg-surface-50 border border-surface-200 rounded-2xl p-8" style="transition-delay:160ms">
+          <div class="w-10 h-10 rounded-lg bg-fire-500/10 flex items-center justify-center mb-5">
+            <i data-lucide="plug" class="w-5 h-5 text-fire-400"></i>
+          </div>
+          <h3 class="text-white font-semibold text-lg mb-3">Universal Compatibility</h3>
+          <p class="text-gray-400 text-sm leading-relaxed">
+            One memory layer for every AI coding tool. Claude Code, Gemini CLI, Codex CLI, OpenCode — same persistent context, same project intelligence, any agent.
+          </p>
+        </div>
+      </div>
+
+      <!-- Supporting features — compact 3x2 grid -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+        <div class="reveal feature-card bg-surface/80 border border-surface-200 rounded-xl p-6 flex gap-4" style="transition-delay:0ms">
+          <div class="flex-shrink-0 mt-0.5">
+            <i data-lucide="list-checks" class="w-5 h-5 text-gray-500"></i>
+          </div>
+          <div>
+            <h3 class="text-white font-medium text-[15px] mb-1.5">Task Tracking</h3>
+            <p class="text-gray-500 text-sm leading-relaxed">Kanban boards, priorities, labels, and task notes. Create tasks in one session, pick them up in the next.</p>
+          </div>
+        </div>
+
+        <div class="reveal feature-card bg-surface/80 border border-surface-200 rounded-xl p-6 flex gap-4" style="transition-delay:60ms">
+          <div class="flex-shrink-0 mt-0.5">
+            <i data-lucide="globe" class="w-5 h-5 text-gray-500"></i>
+          </div>
+          <div>
+            <h3 class="text-white font-medium text-[15px] mb-1.5">Browser Automation</h3>
+            <p class="text-gray-500 text-sm leading-relaxed">Navigate, click, fill forms, and take screenshots. A headless browser controlled entirely by your AI agent.</p>
+          </div>
+        </div>
+
+        <div class="reveal feature-card bg-surface/80 border border-surface-200 rounded-xl p-6 flex gap-4" style="transition-delay:120ms">
+          <div class="flex-shrink-0 mt-0.5">
+            <i data-lucide="search" class="w-5 h-5 text-gray-500"></i>
+          </div>
+          <div>
+            <h3 class="text-white font-medium text-[15px] mb-1.5">Semantic Code Search</h3>
+            <p class="text-gray-500 text-sm leading-relaxed">Search by meaning, not just text. Indexes functions, classes, docs, and git history into a vector store.</p>
+          </div>
+        </div>
+
+        <div class="reveal feature-card bg-surface/80 border border-surface-200 rounded-xl p-6 flex gap-4" style="transition-delay:0ms">
+          <div class="flex-shrink-0 mt-0.5">
+            <i data-lucide="git-pull-request" class="w-5 h-5 text-gray-500"></i>
+          </div>
+          <div>
+            <h3 class="text-white font-medium text-[15px] mb-1.5">GitHub Integration</h3>
+            <p class="text-gray-500 text-sm leading-relaxed">Pull requests, commits, issues, and reviews. See your GitHub activity alongside your tasks and sessions.</p>
+          </div>
+        </div>
+
+        <div class="reveal feature-card bg-surface/80 border border-surface-200 rounded-xl p-6 flex gap-4" style="transition-delay:60ms">
+          <div class="flex-shrink-0 mt-0.5">
+            <i data-lucide="message-circle" class="w-5 h-5 text-gray-500"></i>
+          </div>
+          <div>
+            <h3 class="text-white font-medium text-[15px] mb-1.5">Built-in AI Chat</h3>
+            <p class="text-gray-500 text-sm leading-relaxed">Ask questions about your codebase with full project context. RAG-powered answers without leaving the app.</p>
+          </div>
+        </div>
+
+        <div class="reveal feature-card bg-surface/80 border border-surface-200 rounded-xl p-6 flex gap-4" style="transition-delay:120ms">
+          <div class="flex-shrink-0 mt-0.5">
+            <i data-lucide="file-text" class="w-5 h-5 text-gray-500"></i>
+          </div>
+          <div>
+            <h3 class="text-white font-medium text-[15px] mb-1.5">Notes & Briefings</h3>
+            <p class="text-gray-500 text-sm leading-relaxed">Pin architecture decisions, capture gotchas, get AI-generated daily briefings that summarize project activity.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+
+  <div class="section-divider max-w-xl mx-auto"></div>
+
+
+  <!-- ============================================ -->
+  <!-- GALLERY                                      -->
+  <!-- ============================================ -->
+  <section class="py-28 md:py-36">
+    <div class="max-w-6xl mx-auto px-6">
+      <div class="text-center mb-16 reveal">
+        <p class="text-fire-400 font-medium text-sm uppercase tracking-widest mb-4">See it in action</p>
+        <h2 class="text-3xl md:text-5xl font-bold text-white mb-6">
+          Everything in one place
+        </h2>
+        <p class="text-gray-400 text-lg max-w-2xl mx-auto">
+          A native macOS app that puts your entire AI workflow side-by-side with your terminal.
+        </p>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+        <div class="reveal" style="transition-delay:0ms">
+          <div>
+            <img src="assets/screenshot-02.png" alt="Task board with integrated terminal" class="w-full" loading="lazy">
+          </div>
+          <p class="text-sm text-gray-500 mt-3 ml-1">Integrated terminal alongside the task board</p>
+        </div>
+
+        <div class="reveal" style="transition-delay:80ms">
+          <div>
+            <img src="assets/screenshot-09.png" alt="Session history" class="w-full" loading="lazy">
+          </div>
+          <p class="text-sm text-gray-500 mt-3 ml-1">Session history with cost tracking and tool usage stats</p>
+        </div>
+
+        <div class="reveal" style="transition-delay:0ms">
+          <div>
+            <img src="assets/screenshot-10.png" alt="Task launcher and cost tracker" class="w-full" loading="lazy">
+          </div>
+          <p class="text-sm text-gray-500 mt-3 ml-1">Task launcher, dev tools, and per-project cost tracking</p>
+        </div>
+
+        <div class="reveal" style="transition-delay:80ms">
+          <div>
+            <img src="assets/screenshot-07.png" alt="Git integration" class="w-full" loading="lazy">
+          </div>
+          <p class="text-sm text-gray-500 mt-3 ml-1">Git integration with commits, staged changes, and diffs</p>
+        </div>
+
+        <div class="reveal" style="transition-delay:0ms">
+          <div>
+            <img src="assets/screenshot-04.png" alt="Project notes" class="w-full" loading="lazy">
+          </div>
+          <p class="text-sm text-gray-500 mt-3 ml-1">Per-project notes with pinning and search</p>
+        </div>
+
+        <div class="reveal" style="transition-delay:80ms">
+          <div>
+            <img src="assets/screenshot-08.png" alt="AI image generation" class="w-full" loading="lazy">
+          </div>
+          <p class="text-sm text-gray-500 mt-3 ml-1">Built-in AI image generation</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+
+  <div class="section-divider max-w-xl mx-auto"></div>
+
+
+  <!-- ============================================ -->
+  <!-- HOW IT WORKS                                 -->
+  <!-- ============================================ -->
+  <section class="py-28 md:py-36">
+    <div class="max-w-5xl mx-auto px-6">
+      <div class="text-center mb-20 reveal">
+        <p class="text-fire-400 font-medium text-sm uppercase tracking-widest mb-4">Getting started</p>
+        <h2 class="text-3xl md:text-5xl font-bold text-white">
+          Four steps. That's it.
+        </h2>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-8 md:gap-10">
+        <div class="reveal text-center md:text-left" style="transition-delay:0ms">
+          <div class="inline-flex items-center justify-center w-12 h-12 rounded-full border-2 border-fire-500/30 text-fire-400 font-bold text-lg mb-5">
+            1
+          </div>
+          <h3 class="text-white font-semibold text-lg mb-2">Download</h3>
+          <p class="text-gray-400 text-sm leading-relaxed">
+            Grab Scope.app from GitHub Releases and drag it to your Applications folder.
+          </p>
+        </div>
+
+        <div class="reveal text-center md:text-left" style="transition-delay:80ms">
+          <div class="inline-flex items-center justify-center w-12 h-12 rounded-full border-2 border-fire-500/30 text-fire-400 font-bold text-lg mb-5">
+            2
+          </div>
+          <h3 class="text-white font-semibold text-lg mb-2">Connect</h3>
+          <p class="text-gray-400 text-sm leading-relaxed">
+            Click one button to install the MCP server for your CLI tool. No config files to edit.
+          </p>
+        </div>
+
+        <div class="reveal text-center md:text-left" style="transition-delay:160ms">
+          <div class="inline-flex items-center justify-center w-12 h-12 rounded-full border-2 border-fire-500/30 text-fire-400 font-bold text-lg mb-5">
+            3
+          </div>
+          <h3 class="text-white font-semibold text-lg mb-2">Configure</h3>
+          <p class="text-gray-400 text-sm leading-relaxed">
+            Add your <a href="https://openrouter.ai/keys" target="_blank" rel="noopener" class="text-fire-400 hover:text-fire-300 underline underline-offset-2">OpenRouter API key</a> in Settings to unlock AI chat, code search, and image generation.
+          </p>
+        </div>
+
+        <div class="reveal text-center md:text-left" style="transition-delay:240ms">
+          <div class="inline-flex items-center justify-center w-12 h-12 rounded-full border-2 border-fire-500/30 text-fire-400 font-bold text-lg mb-5">
+            4
+          </div>
+          <h3 class="text-white font-semibold text-lg mb-2">Code</h3>
+          <p class="text-gray-400 text-sm leading-relaxed">
+            Your AI agent now has persistent memory, browser tools, code search, and more — across every session.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+
+  <div class="section-divider max-w-xl mx-auto"></div>
+
+
+  <!-- ============================================ -->
+  <!-- CONNECT YOUR CLI                             -->
+  <!-- ============================================ -->
+  <section id="setup" class="py-28 md:py-36">
+    <div class="max-w-4xl mx-auto px-6">
+      <div class="text-center mb-16 reveal">
+        <p class="text-fire-400 font-medium text-sm uppercase tracking-widest mb-4">One-click setup</p>
+        <h2 class="text-3xl md:text-5xl font-bold text-white mb-6">
+          Connect your CLI
+        </h2>
+        <p class="text-gray-400 text-lg max-w-xl mx-auto">
+          Click to install the Scope MCP server. Your CLI tool will connect to Scope automatically.
+        </p>
+      </div>
+
+      <div class="reveal grid grid-cols-2 sm:grid-cols-4 gap-3 max-w-2xl mx-auto">
+        <a href="scope://install-mcp?client=claude-code"
+           class="cli-btn group flex flex-col items-center gap-3 border border-surface-300 hover:border-gray-500 rounded-xl px-4 py-5 transition-all hover:bg-white/[0.02]">
+          <span class="text-white font-medium text-sm">Claude Code</span>
+          <span class="text-[11px] text-gray-600 group-hover:text-gray-400 transition-colors">Install MCP</span>
+        </a>
+
+        <a href="scope://install-mcp?client=gemini-cli"
+           class="cli-btn group flex flex-col items-center gap-3 border border-surface-300 hover:border-gray-500 rounded-xl px-4 py-5 transition-all hover:bg-white/[0.02]">
+          <span class="text-white font-medium text-sm">Gemini CLI</span>
+          <span class="text-[11px] text-gray-600 group-hover:text-gray-400 transition-colors">Install MCP</span>
+        </a>
+
+        <a href="scope://install-mcp?client=codex-cli"
+           class="cli-btn group flex flex-col items-center gap-3 border border-surface-300 hover:border-gray-500 rounded-xl px-4 py-5 transition-all hover:bg-white/[0.02]">
+          <span class="text-white font-medium text-sm">Codex CLI</span>
+          <span class="text-[11px] text-gray-600 group-hover:text-gray-400 transition-colors">Install MCP</span>
+        </a>
+
+        <a href="scope://install-mcp?client=opencode"
+           class="cli-btn group flex flex-col items-center gap-3 border border-surface-300 hover:border-gray-500 rounded-xl px-4 py-5 transition-all hover:bg-white/[0.02]">
+          <span class="text-white font-medium text-sm">OpenCode</span>
+          <span class="text-[11px] text-gray-600 group-hover:text-gray-400 transition-colors">Install MCP</span>
+        </a>
+      </div>
+
+      <p class="reveal text-center text-sm text-gray-600 mt-6">
+        Don't have Scope installed? <a href="https://github.com/ctab30/scope/releases/latest" class="text-gray-400 hover:text-white underline underline-offset-2 transition-colors">Download it first</a>.
+      </p>
+    </div>
+  </section>
+
+
+  <!-- ============================================ -->
+  <!-- MANUAL SETUP                                 -->
+  <!-- ============================================ -->
+  <section id="manual-setup" class="py-20 md:py-28 bg-surface-50/30">
+    <div class="max-w-4xl mx-auto px-6">
+      <div class="text-center mb-12 reveal">
+        <h2 class="text-2xl md:text-3xl font-bold text-white mb-4">
+          Manual Setup
+        </h2>
+        <p class="text-gray-500 text-base max-w-lg mx-auto">
+          Prefer to configure things yourself? Add the MCP server manually.
+        </p>
+      </div>
+
+      <div class="space-y-4">
+        <!-- Claude Code -->
+        <details class="reveal group">
+          <summary class="flex items-center gap-3 bg-surface border border-surface-200 rounded-xl px-6 py-4 hover:border-surface-300 transition-colors">
+            <i data-lucide="chevron-right" class="chevron-icon w-4 h-4 text-gray-600 flex-shrink-0"></i>
+            <span class="font-medium text-white">Claude Code</span>
+            <span class="text-xs text-gray-600 ml-auto font-mono">Terminal command</span>
+          </summary>
+          <div class="mt-3 code-block p-5">
+            <code class="font-mono text-sm text-gray-300">
+              <span class="text-gray-600">$</span> <span class="text-fire-400">claude</span> mcp add scope ~/Library/Application\ Support/Scope/bin/ScopeMCP
+            </code>
+          </div>
+        </details>
+
+        <!-- Gemini CLI -->
+        <details class="reveal group">
+          <summary class="flex items-center gap-3 bg-surface border border-surface-200 rounded-xl px-6 py-4 hover:border-surface-300 transition-colors">
+            <i data-lucide="chevron-right" class="chevron-icon w-4 h-4 text-gray-600 flex-shrink-0"></i>
+            <span class="font-medium text-white">Gemini CLI</span>
+            <span class="text-xs text-gray-600 ml-auto font-mono">~/.gemini/settings.json</span>
+          </summary>
+          <div class="mt-3 code-block p-5">
+<pre class="font-mono text-sm text-gray-300"><span class="text-gray-600">// ~/.gemini/settings.json</span>
+{
+  <span class="text-fire-400">"mcpServers"</span>: {
+    <span class="text-fire-300">"scope"</span>: {
+      <span class="text-emerald-400">"command"</span>: <span class="text-amber-300">"~/Library/Application Support/Scope/bin/ScopeMCP"</span>,
+      <span class="text-emerald-400">"args"</span>: []
+    }
+  }
+}</pre>
+          </div>
+        </details>
+
+        <!-- Codex CLI -->
+        <details class="reveal group">
+          <summary class="flex items-center gap-3 bg-surface border border-surface-200 rounded-xl px-6 py-4 hover:border-surface-300 transition-colors">
+            <i data-lucide="chevron-right" class="chevron-icon w-4 h-4 text-gray-600 flex-shrink-0"></i>
+            <span class="font-medium text-white">Codex CLI</span>
+            <span class="text-xs text-gray-600 ml-auto font-mono">~/.codex/config.toml</span>
+          </summary>
+          <div class="mt-3 code-block p-5">
+<pre class="font-mono text-sm text-gray-300"><span class="text-gray-600"># ~/.codex/config.toml</span>
+<span class="text-fire-400">[mcp_servers.scope]</span>
+<span class="text-emerald-400">command</span> = <span class="text-amber-300">"~/Library/Application Support/Scope/bin/ScopeMCP"</span>
+<span class="text-emerald-400">args</span> = []</pre>
+          </div>
+        </details>
+
+        <!-- OpenCode -->
+        <details class="reveal group">
+          <summary class="flex items-center gap-3 bg-surface border border-surface-200 rounded-xl px-6 py-4 hover:border-surface-300 transition-colors">
+            <i data-lucide="chevron-right" class="chevron-icon w-4 h-4 text-gray-600 flex-shrink-0"></i>
+            <span class="font-medium text-white">OpenCode</span>
+            <span class="text-xs text-gray-600 ml-auto font-mono">~/.opencode/config.json</span>
+          </summary>
+          <div class="mt-3 code-block p-5">
+<pre class="font-mono text-sm text-gray-300"><span class="text-gray-600">// ~/.opencode/config.json</span>
+{
+  <span class="text-fire-400">"mcpServers"</span>: {
+    <span class="text-fire-300">"scope"</span>: {
+      <span class="text-emerald-400">"command"</span>: <span class="text-amber-300">"~/Library/Application Support/Scope/bin/ScopeMCP"</span>,
+      <span class="text-emerald-400">"args"</span>: []
+    }
+  }
+}</pre>
+          </div>
+        </details>
+      </div>
+    </div>
+  </section>
+
+
+  <!-- ============================================ -->
+  <!-- API KEYS                                     -->
+  <!-- ============================================ -->
+  <section id="api-keys" class="py-20 md:py-28">
+    <div class="max-w-4xl mx-auto px-6">
+      <div class="text-center mb-12 reveal">
+        <p class="text-fire-400 font-medium text-sm uppercase tracking-widest mb-4">Configuration</p>
+        <h2 class="text-2xl md:text-3xl font-bold text-white mb-4">
+          API Keys
+        </h2>
+        <p class="text-gray-500 text-base max-w-lg mx-auto">
+          Scope uses external APIs for its AI-powered features. Add your keys in <strong class="text-gray-300">Settings</strong> (<code class="text-xs bg-surface-200 px-1.5 py-0.5 rounded">Cmd + ,</code>).
+        </p>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <!-- OpenRouter -->
+        <div class="reveal feature-card bg-surface-50 border border-surface-200 rounded-2xl p-8">
+          <div class="flex items-center gap-3 mb-4">
+            <div class="w-10 h-10 rounded-lg bg-fire-500/10 flex items-center justify-center">
+              <i data-lucide="key" class="w-5 h-5 text-fire-400"></i>
+            </div>
+            <div>
+              <h3 class="text-white font-semibold text-lg">OpenRouter</h3>
+              <span class="text-xs font-medium text-fire-400 bg-fire-500/10 px-2 py-0.5 rounded-full">Required</span>
+            </div>
+          </div>
+          <p class="text-gray-400 text-sm leading-relaxed mb-4">
+            Powers the built-in AI chat, semantic code search, and image generation. All models are served through OpenRouter with a single key.
+          </p>
+          <div class="code-block px-4 py-3 mb-4">
+            <code class="font-mono text-sm text-gray-400">sk-or-v1-...</code>
+          </div>
+          <a href="https://openrouter.ai/keys" target="_blank" rel="noopener"
+             class="inline-flex items-center gap-2 text-sm text-fire-400 hover:text-fire-300 transition-colors">
+            Get your API key
+            <i data-lucide="external-link" class="w-3.5 h-3.5"></i>
+          </a>
+        </div>
+
+        <!-- Google OAuth -->
+        <div class="reveal feature-card bg-surface-50 border border-surface-200 rounded-2xl p-8">
+          <div class="flex items-center gap-3 mb-4">
+            <div class="w-10 h-10 rounded-lg bg-surface-300/50 flex items-center justify-center">
+              <i data-lucide="mail" class="w-5 h-5 text-gray-500"></i>
+            </div>
+            <div>
+              <h3 class="text-white font-semibold text-lg">Google OAuth</h3>
+              <span class="text-xs font-medium text-gray-500 bg-surface-300/50 px-2 py-0.5 rounded-full">Optional</span>
+            </div>
+          </div>
+          <p class="text-gray-400 text-sm leading-relaxed mb-4">
+            Enables Gmail integration for email-to-task sync. Requires a Client ID and Client Secret from the Google Cloud Console.
+          </p>
+          <div class="code-block px-4 py-3 mb-4">
+            <code class="font-mono text-sm text-gray-400">Client ID + Client Secret</code>
+          </div>
+          <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener"
+             class="inline-flex items-center gap-2 text-sm text-gray-400 hover:text-gray-300 transition-colors">
+            Google Cloud Console
+            <i data-lucide="external-link" class="w-3.5 h-3.5"></i>
+          </a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+
+  <!-- ============================================ -->
+  <!-- OPEN SOURCE CTA                              -->
+  <!-- ============================================ -->
+  <section class="py-28 md:py-36">
+    <div class="max-w-3xl mx-auto px-6">
+      <div class="reveal relative rounded-2xl border border-surface-200 p-12 md:p-16 text-center overflow-hidden">
+        <!-- Gradient glow -->
+        <div class="absolute inset-0 bg-gradient-to-b from-fire-500/[0.04] to-transparent pointer-events-none"></div>
+
+        <div class="relative">
+          <i data-lucide="flame" class="w-8 h-8 text-fire-500 mx-auto mb-6"></i>
+          <h2 class="text-2xl md:text-4xl font-bold text-white mb-4">
+            Free. Open source. No telemetry.
+          </h2>
+          <p class="text-gray-400 text-base max-w-lg mx-auto mb-8 leading-relaxed">
+            Built by developers who got tired of re-explaining context to their AI agents. MIT licensed. Contributions welcome.
+          </p>
+          <div class="flex flex-col sm:flex-row gap-4 justify-center">
+            <a href="https://github.com/ctab30/scope" target="_blank" rel="noopener"
+               class="inline-flex items-center gap-2 border border-gray-700 hover:border-gray-500 text-gray-200 font-medium px-6 py-3 rounded-xl transition-all hover:bg-white/[0.03]">
+              <i data-lucide="github" class="w-5 h-5"></i>
+              Star on GitHub
+            </a>
+            <a href="https://github.com/ctab30/scope/releases/latest"
+               class="inline-flex items-center gap-2 bg-fire-500 hover:bg-fire-600 text-white font-semibold px-6 py-3 rounded-xl transition-all hover:shadow-lg hover:shadow-fire-500/25">
+              <i data-lucide="download" class="w-5 h-5"></i>
+              Download for macOS
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+
+  <!-- ============================================ -->
+  <!-- FOOTER                                       -->
+  <!-- ============================================ -->
+  <footer class="border-t border-surface-200 py-12">
+    <div class="max-w-6xl mx-auto px-6 flex flex-col md:flex-row items-center justify-between gap-6">
+      <div class="flex items-center gap-3">
+        <img src="scope-logo.svg" alt="" class="h-5 opacity-60">
+        <span class="text-gray-600 text-sm">
+          Built by <a href="https://github.com/ctab30" target="_blank" rel="noopener" class="text-gray-500 hover:text-white transition-colors">ctab30</a>
+        </span>
+      </div>
+      <div class="flex items-center gap-6">
+        <a href="https://github.com/ctab30/scope" target="_blank" rel="noopener"
+           class="text-gray-600 hover:text-gray-300 transition-colors text-sm flex items-center gap-1.5">
+          <i data-lucide="github" class="w-4 h-4"></i>
+          GitHub
+        </a>
+        <span class="text-gray-800 text-xs font-mono border border-surface-300 rounded px-2 py-0.5">MIT License</span>
+      </div>
+    </div>
+  </footer>
+
+
+  <!-- ============================================ -->
+  <!-- SCRIPTS                                      -->
+  <!-- ============================================ -->
+  <script>
+    // Initialize Lucide icons
+    lucide.createIcons();
+
+    // Scroll-triggered reveals with stagger
+    document.addEventListener('DOMContentLoaded', () => {
+      const reveals = document.querySelectorAll('.reveal');
+      const observer = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+          if (entry.isIntersecting) {
+            entry.target.classList.add('visible');
+            observer.unobserve(entry.target);
+          }
+        });
+      }, { threshold: 0.08, rootMargin: '0px 0px -30px 0px' });
+      reveals.forEach(el => observer.observe(el));
+    });
+
+    // Nav scroll effect
+    const nav = document.getElementById('nav');
+    let ticking = false;
+    window.addEventListener('scroll', () => {
+      if (!ticking) {
+        requestAnimationFrame(() => {
+          nav.classList.toggle('nav-scrolled', window.scrollY > 24);
+          ticking = false;
+        });
+        ticking = true;
+      }
+    });
+  </script>
+
+</body>
+</html>
