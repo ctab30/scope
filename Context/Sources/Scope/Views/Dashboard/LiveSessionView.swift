@@ -104,7 +104,7 @@ struct LiveSessionView: View {
                         .foregroundColor(.secondary)
                 }
 
-                Text("Scope")
+                Text("Workspace")
                     .font(ScopeTheme.Font.caption)
                     .foregroundColor(.secondary)
             }
@@ -116,7 +116,7 @@ struct LiveSessionView: View {
                 value: String(format: "$%.2f", state.estimatedCost),
                 label: "Cost",
                 icon: "dollarsign.circle",
-                color: state.estimatedCost > 1 ? .orange : .green
+                color: state.estimatedCost > 1 ? .white : .green
             )
 
             // Messages
@@ -154,7 +154,7 @@ struct LiveSessionView: View {
 
     private var contextColor: Color {
         if state.contextUsagePercent > 0.85 { return .red }
-        if state.contextUsagePercent > 0.65 { return .orange }
+        if state.contextUsagePercent > 0.65 { return .white }
         return .blue
     }
 

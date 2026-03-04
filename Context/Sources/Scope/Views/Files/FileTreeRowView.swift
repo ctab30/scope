@@ -59,7 +59,7 @@ struct FileTreeRowView: View {
             switch ext {
             case "swift":
                 Image(systemName: "swift")
-                    .foregroundColor(.orange)
+                    .foregroundColor(.white)
             case "js", "jsx", "ts", "tsx":
                 Image(systemName: "doc.text")
                     .foregroundColor(.yellow)

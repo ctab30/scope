@@ -42,6 +42,17 @@ class SystemNotificationService: NSObject, ObservableObject, UNUserNotificationC
             .store(in: &cancellables)
     }
 
+    func observeNeedsAttentionNotifications() {
+        NotificationCenter.default.publisher(for: .tasksNeedAttention)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] notification in
+                guard let self else { return }
+                let projectName = notification.userInfo?["projectName"] as? String
+                self.sendNeedsAttentionNotification(projectName: projectName)
+            }
+            .store(in: &cancellables)
+    }
+
     // MARK: - Send Notifications
 
     private func sendClaudeFinishedNotification() {
@@ -53,6 +64,23 @@ class SystemNotificationService: NSObject, ObservableObject, UNUserNotificationC
 
         let request = UNNotificationRequest(
             identifier: "claudeDone-\(UUID().uuidString)",
+            content: content,
+            trigger: nil
+        )
+        UNUserNotificationCenter.current().add(request)
+    }
+
+    private func sendNeedsAttentionNotification(projectName: String?) {
+        guard Bundle.main.bundleIdentifier != nil else { return }
+        let content = UNMutableNotificationContent()
+        content.title = "Needs Attention"
+        content.body = projectName != nil
+            ? "\(projectName!) has tasks waiting for your input"
+            : "Tasks are waiting for your input"
+        content.sound = .default
+
+        let request = UNNotificationRequest(
+            identifier: "needsAttention-\(UUID().uuidString)",
             content: content,
             trigger: nil
         )

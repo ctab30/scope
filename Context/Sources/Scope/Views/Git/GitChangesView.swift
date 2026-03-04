@@ -93,7 +93,7 @@ struct GitChangesView: View {
                     icon: "circle.dashed",
                     count: gitService.unstagedFiles.count,
                     key: "unstaged",
-                    accentColor: .orange
+                    accentColor: .white
                 )
 
                 if !collapsedSections.contains("unstaged") {
@@ -284,7 +284,7 @@ struct GitChangesView: View {
                     .foregroundColor(.white)
                     .padding(.horizontal, ScopeTheme.Spacing.xs)
                     .padding(.vertical, 1)
-                    .background(Capsule().fill(Color.orange))
+                    .background(RoundedRectangle(cornerRadius: 4).fill(Color.white))
             }
 
             Spacer()
@@ -356,9 +356,9 @@ struct GitChangesView: View {
                 .padding(.vertical, ScopeTheme.Spacing.xxs)
                 .background(
                     RoundedRectangle(cornerRadius: ScopeTheme.Radius.small)
-                        .fill(Color.orange.opacity(ScopeTheme.Opacity.selection))
+                        .fill(Color.white.opacity(ScopeTheme.Opacity.selection))
                 )
-                .foregroundColor(.orange)
+                .foregroundColor(.white)
 
                 Spacer()
 
@@ -423,7 +423,7 @@ struct GitChangesView: View {
                         .foregroundColor(.white)
                         .padding(.horizontal, ScopeTheme.Spacing.xs)
                         .padding(.vertical, 1)
-                        .background(Capsule().fill(accentColor.opacity(0.7)))
+                        .background(RoundedRectangle(cornerRadius: 4).fill(accentColor.opacity(0.7)))
                 }
 
                 Spacer()
@@ -589,11 +589,11 @@ struct GitChangesView: View {
                 } label: {
                     Image(systemName: "minus")
                         .font(ScopeTheme.Font.caption)
-                        .foregroundColor(.orange)
+                        .foregroundColor(.white)
                         .frame(width: ScopeTheme.Spacing.xl, height: ScopeTheme.Spacing.xl)
                         .background(
                             RoundedRectangle(cornerRadius: ScopeTheme.Radius.small)
-                                .fill(Color.orange.opacity(ScopeTheme.Opacity.selection))
+                                .fill(Color.white.opacity(ScopeTheme.Opacity.selection))
                         )
                 }
                 .buttonStyle(.plain)
@@ -742,10 +742,10 @@ struct GitChangesView: View {
                     if pr.isDraft {
                         Text("Draft")
                             .font(ScopeTheme.Font.tag)
-                            .foregroundColor(.orange)
+                            .foregroundColor(.white)
                             .padding(.horizontal, ScopeTheme.Spacing.xxs)
                             .padding(.vertical, 1)
-                            .background(Capsule().fill(Color.orange.opacity(0.15)))
+                            .background(RoundedRectangle(cornerRadius: 4).fill(Color.white.opacity(0.15)))
                     }
 
                     Spacer()
@@ -871,7 +871,7 @@ struct GitChangesView: View {
                                 .padding(.horizontal, ScopeTheme.Spacing.xs)
                                 .padding(.vertical, ScopeTheme.Spacing.xxxs)
                                 .background(
-                                    Capsule()
+                                    RoundedRectangle(cornerRadius: 4)
                                         .fill(Color(hex: label.color) ?? Color.secondary)
                                 )
                         }
@@ -908,7 +908,7 @@ struct GitChangesView: View {
         case .pending:
             Image(systemName: "clock.fill")
                 .font(.system(size: 12))
-                .foregroundColor(.orange)
+                .foregroundColor(.white)
         case .none:
             EmptyView()
         }
@@ -928,7 +928,7 @@ struct GitChangesView: View {
         case "REVIEW_REQUIRED":
             Image(systemName: "clock.fill")
                 .font(.system(size: 12))
-                .foregroundColor(.orange)
+                .foregroundColor(.white)
         default:
             EmptyView()
         }
@@ -952,7 +952,7 @@ struct GitChangesView: View {
         case "in_progress", "queued", "requested", "waiting", "pending":
             Image(systemName: "arrow.triangle.2.circlepath")
                 .font(.system(size: 14))
-                .foregroundColor(.orange)
+                .foregroundColor(.white)
         default:
             Image(systemName: "questionmark.circle")
                 .font(.system(size: 14))

@@ -30,10 +30,10 @@ struct NoteEditorView: View {
                 } label: {
                     Image(systemName: note.pinned ? "pin.fill" : "pin")
                         .font(.system(size: 12))
-                        .foregroundColor(note.pinned ? .orange : .secondary)
+                        .foregroundColor(note.pinned ? .white : .secondary)
                         .frame(width: 26, height: 26)
                         .background(Color(nsColor: .controlBackgroundColor).opacity(0.6))
-                        .cornerRadius(6)
+                        .cornerRadius(ScopeTheme.Radius.small)
                 }
                 .buttonStyle(.plain)
                 .help(note.pinned ? "Unpin note" : "Pin note")
@@ -51,9 +51,9 @@ struct NoteEditorView: View {
                     .padding(.vertical, 5)
                     .background(Color.accentColor.opacity(0.15))
                     .foregroundColor(.accentColor)
-                    .cornerRadius(6)
+                    .cornerRadius(ScopeTheme.Radius.small)
                     .overlay(
-                        RoundedRectangle(cornerRadius: 6)
+                        RoundedRectangle(cornerRadius: ScopeTheme.Radius.small)
                             .stroke(Color.accentColor.opacity(0.2), lineWidth: 0.5)
                     )
                 }
@@ -67,7 +67,7 @@ struct NoteEditorView: View {
                         .foregroundColor(.red.opacity(0.7))
                         .frame(width: 26, height: 26)
                         .background(Color(nsColor: .controlBackgroundColor).opacity(0.6))
-                        .cornerRadius(6)
+                        .cornerRadius(ScopeTheme.Radius.small)
                 }
                 .buttonStyle(.plain)
                 .help("Delete note")

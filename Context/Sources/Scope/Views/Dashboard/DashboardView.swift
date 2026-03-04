@@ -85,7 +85,7 @@ struct DashboardView: View {
                         icon: "circle.dotted",
                         value: "\(pendingTaskCount)",
                         label: "Pending",
-                        color: .orange
+                        color: .white
                     )
                     StatCard(
                         icon: "arrow.triangle.2.circlepath",
@@ -281,7 +281,7 @@ struct SessionCard: View {
                     MetadataPill(
                         icon: "dollarsign.circle",
                         text: String(format: "$%.2f", session.estimatedCost),
-                        color: session.estimatedCost > 1 ? .orange : .green
+                        color: session.estimatedCost > 1 ? .white : .green
                     )
                 }
             }

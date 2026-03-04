@@ -39,7 +39,7 @@ struct NetworkRequestEntry: Identifiable {
         switch status {
         case 200..<300: return .green
         case 300..<400: return .blue
-        case 400..<500: return .orange
+        case 400..<500: return .white
         case 500..<600: return .red
         default: return .secondary
         }
@@ -100,7 +100,7 @@ struct NetworkRequestEntry: Identifiable {
         switch statusClass {
         case .success: return .green
         case .redirect: return .blue
-        case .clientError: return .orange
+        case .clientError: return .white
         case .serverError: return .red
         case .unknown: return isError ? .red : .secondary
         }

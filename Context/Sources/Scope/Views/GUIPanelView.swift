@@ -1,4 +1,5 @@
 import SwiftUI
+import GRDB
 
 // MARK: - MCP Connection Monitor
 
@@ -8,6 +9,7 @@ struct MCPConnection: Identifiable {
     let projectId: String?
     let projectName: String?
     let connectedAt: String
+    let lastActivityAt: Date?
 }
 
 class MCPConnectionMonitor: ObservableObject {
@@ -56,7 +58,40 @@ class MCPConnectionMonitor: ObservableObject {
 
             // Check if process is still running
             if kill(Int32(pid), 0) != 0 {
-                // Process is dead — clean up stale file
+                // Process is dead — read projectId before cleanup
+                if let data = try? Data(contentsOf: file),
+                   let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                   let projectId = json["projectId"] as? String {
+                    // Check if any OTHER active connections exist for this project
+                    let otherFiles = files.filter { f in
+                        guard f != file, f.pathExtension == "json" else { return false }
+                        guard let pStr = f.deletingPathExtension().lastPathComponent.components(separatedBy: ".").first,
+                              let otherPid = Int(pStr),
+                              kill(Int32(otherPid), 0) == 0 else { return false }
+                        guard let d = try? Data(contentsOf: f),
+                              let j = try? JSONSerialization.jsonObject(with: d) as? [String: Any],
+                              let pId = j["projectId"] as? String else { return false }
+                        return pId == projectId
+                    }
+                    if otherFiles.isEmpty {
+                        // No other sessions — move in_progress tasks to needs_attention
+                        let moved = try? DatabaseService.shared.dbQueue.write { db -> Int in
+                            try db.execute(
+                                sql: "UPDATE taskItems SET status = 'needs_attention' WHERE projectId = ? AND status = 'in_progress'",
+                                arguments: [projectId]
+                            )
+                            return db.changesCount
+                        }
+                        if let moved, moved > 0 {
+                            let projName = json["projectName"] as? String
+                            DispatchQueue.main.async {
+                                NotificationCenter.default.post(name: .tasksDidChange, object: nil)
+                                NotificationCenter.default.post(name: .tasksNeedAttention, object: nil, userInfo: ["projectName": projName as Any])
+                            }
+                        }
+                    }
+                }
+                // Clean up stale file
                 try? FileManager.default.removeItem(at: file)
                 continue
             }
@@ -64,12 +99,39 @@ class MCPConnectionMonitor: ObservableObject {
             guard let data = try? Data(contentsOf: file),
                   let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { continue }
 
+            var lastActivity: Date? = nil
+            if let lastActivityStr = json["lastActivityAt"] as? String {
+                lastActivity = ISO8601DateFormatter().date(from: lastActivityStr)
+            }
+
+            // Detect idle sessions: alive but no MCP activity for 60+ seconds
+            if let projectId = json["projectId"] as? String,
+               let activity = lastActivity,
+               Date().timeIntervalSince(activity) > 60 {
+                // Move in_progress tasks to needs_attention for this idle session
+                let moved = try? DatabaseService.shared.dbQueue.write { db -> Int in
+                    try db.execute(
+                        sql: "UPDATE taskItems SET status = 'needs_attention' WHERE projectId = ? AND status = 'in_progress'",
+                        arguments: [projectId]
+                    )
+                    return db.changesCount
+                }
+                if let moved, moved > 0 {
+                    let projName = json["projectName"] as? String
+                    DispatchQueue.main.async {
+                        NotificationCenter.default.post(name: .tasksDidChange, object: nil)
+                        NotificationCenter.default.post(name: .tasksNeedAttention, object: nil, userInfo: ["projectName": projName as Any])
+                    }
+                }
+            }
+
             active.append(MCPConnection(
                 id: pid,
                 cwd: json["cwd"] as? String ?? "unknown",
                 projectId: json["projectId"] as? String,
                 projectName: json["projectName"] as? String,
-                connectedAt: json["connectedAt"] as? String ?? ""
+                connectedAt: json["connectedAt"] as? String ?? "",
+                lastActivityAt: lastActivity
             ))
         }
 
@@ -92,18 +154,6 @@ struct GUIPanelView: View {
                     BrowserView(viewModel: browserViewModel)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
-                    // Home view header
-                    HStack {
-                        Text("Planner")
-                            .font(.title3.weight(.semibold))
-                        Spacer()
-                        MCPIndicator(connections: mcpMonitor.connections, currentProjectId: nil)
-                    }
-                    .padding(.horizontal, ScopeTheme.Spacing.lg)
-                    .padding(.vertical, ScopeTheme.Spacing.sm)
-
-                    Divider()
-
                     // Home content
                     HomeView()
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -206,7 +256,7 @@ struct GUIPanelView: View {
                 isGenerating: appState.isProfileGenerating,
                 hasProfile: appState.projectProfile != nil
             )
-            MCPIndicator(connections: mcpMonitor.connections, currentProjectId: appState.currentProject?.id)
+            MCPIndicator(connections: mcpMonitor.connections)
         }
     }
 
@@ -244,63 +294,46 @@ struct GUIPanelView: View {
 
 struct MCPIndicator: View {
     let connections: [MCPConnection]
-    let currentProjectId: String?
-
-    /// Connections matching the currently selected project.
-    private var projectConnections: [MCPConnection] {
-        guard let pid = currentProjectId else { return [] }
-        return connections.filter { $0.projectId == pid }
-    }
-
-    private var isConnectedToCurrentProject: Bool {
-        !projectConnections.isEmpty
-    }
+    @State private var showPopover = false
 
     private var statusColor: Color {
-        .green
+        connections.isEmpty ? .secondary.opacity(0.6) : .green
     }
 
     var body: some View {
-        if connections.isEmpty {
-            HStack(spacing: 3) {
-                Circle()
-                    .fill(Color.secondary.opacity(0.3))
-                    .frame(width: 6, height: 6)
-                Text("MCP")
-                    .font(ScopeTheme.Font.caption)
-                    .foregroundColor(.secondary.opacity(0.4))
-            }
-        } else {
-            Menu {
-                Section("MCP Connections (\(connections.count))") {
+        HStack(spacing: 3) {
+            Circle()
+                .fill(statusColor)
+                .frame(width: 6, height: 6)
+            Text("MCP")
+                .font(ScopeTheme.Font.caption)
+                .foregroundColor(statusColor)
+        }
+        .onTapGesture { showPopover.toggle() }
+        .popover(isPresented: $showPopover) {
+            VStack(alignment: .leading, spacing: ScopeTheme.Spacing.sm) {
+                if connections.isEmpty {
+                    Text("No MCP connections")
+                        .font(ScopeTheme.Font.footnote)
+                        .foregroundColor(.secondary)
+                } else {
+                    Text("MCP Connections")
+                        .font(ScopeTheme.Font.footnoteSemibold)
                     ForEach(connections) { conn in
-                        let isCurrent = conn.projectId == currentProjectId
-                        Label {
-                            Text("\(conn.projectName ?? "Unknown") — PID \(conn.id)")
-                        } icon: {
-                            Image(systemName: isCurrent ? "checkmark.circle.fill" : "circle")
+                        HStack(spacing: 6) {
+                            Circle()
+                                .fill(Color.green)
+                                .frame(width: 6, height: 6)
+                            Text("\(conn.projectName ?? "Unknown")")
+                                .font(ScopeTheme.Font.footnote)
+                            Text("PID \(conn.id)")
+                                .font(ScopeTheme.Font.caption)
+                                .foregroundColor(.secondary)
                         }
                     }
                 }
-            } label: {
-                HStack(spacing: 3) {
-                    Circle()
-                        .fill(statusColor)
-                        .frame(width: 6, height: 6)
-                    Text("MCP")
-                        .font(ScopeTheme.Font.caption)
-                        .foregroundColor(statusColor)
-                    if connections.count > 1 {
-                        Text("\(connections.count)")
-                            .font(ScopeTheme.Font.tag)
-                            .fontDesign(.monospaced)
-                            .foregroundColor(statusColor)
-                    }
-                }
             }
-            .menuStyle(.borderlessButton)
-            .menuIndicator(.hidden)
-            .fixedSize()
+            .padding(ScopeTheme.Spacing.md)
         }
     }
 
@@ -328,7 +361,7 @@ struct IndexIndicator: View {
 
     private var statusColor: Color {
         switch indexStatus {
-        case "indexing": return .orange
+        case "indexing": return .white
         case "ready": return .green
         case "error": return .red
         case "idle": return .secondary.opacity(0.6)
@@ -409,7 +442,7 @@ struct ProfileIndicator: View {
     let hasProfile: Bool
 
     private var statusColor: Color {
-        if isGenerating { return .orange }
+        if isGenerating { return .white }
         if hasProfile { return .green }
         return .secondary.opacity(0.5)
     }

@@ -294,7 +294,7 @@ private struct ContextEngineSettingsTab: View {
     private var statusColor: Color {
         switch contextEngine.indexStatus {
         case "ready": return .green
-        case "indexing": return .orange
+        case "indexing": return .white
         case "error": return .red
         default: return .secondary
         }

@@ -11,18 +11,20 @@ struct TaskCardView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: ScopeTheme.Spacing.xs) {
-            // Title + priority
+            // Title + priority tag
             HStack(alignment: .top, spacing: ScopeTheme.Spacing.xs) {
-                if task.priority > 0 {
-                    Image(systemName: task.priorityLevel.icon)
-                        .font(.system(size: 9, weight: .bold))
-                        .foregroundColor(task.priorityLevel.color)
-                        .frame(width: 12)
-                        .padding(.top, 2)
-                }
                 Text(settings.demoMode ? DemoContent.shared.mask(task.title, as: .task) : task.title)
                     .font(ScopeTheme.Font.footnoteMedium)
                     .lineLimit(2)
+
+                Spacer()
+
+                if task.priority > 0 {
+                    Text(task.priorityLevel.label.uppercased())
+                        .font(ScopeTheme.Font.tag)
+                        .tracking(0.3)
+                        .foregroundColor(task.priorityLevel.color)
+                }
             }
 
             if let description = task.description, !description.isEmpty {
@@ -93,7 +95,7 @@ struct TaskCardView: View {
         case "claude": return .blue
         case "ai-extracted": return .purple
         case "email": return .green
-        case "browser": return .orange
+        case "browser": return .white
         case "chat": return .indigo
         default: return .secondary
         }

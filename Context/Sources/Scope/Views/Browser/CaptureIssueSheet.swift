@@ -80,7 +80,7 @@ struct CaptureIssueSheet: View {
                         .padding(.vertical, 6)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .background(
-                            RoundedRectangle(cornerRadius: 6)
+                            RoundedRectangle(cornerRadius: ScopeTheme.Radius.small)
                                 .fill(Color(nsColor: .controlBackgroundColor))
                         )
                     }
@@ -92,9 +92,9 @@ struct CaptureIssueSheet: View {
                                 .resizable()
                                 .aspectRatio(contentMode: .fit)
                                 .frame(width: 120, height: 80)
-                                .clipShape(RoundedRectangle(cornerRadius: 6))
+                                .clipShape(RoundedRectangle(cornerRadius: ScopeTheme.Radius.small))
                                 .overlay(
-                                    RoundedRectangle(cornerRadius: 6)
+                                    RoundedRectangle(cornerRadius: ScopeTheme.Radius.small)
                                         .stroke(Color(nsColor: .separatorColor).opacity(0.3), lineWidth: 0.5)
                                 )
 
@@ -121,11 +121,11 @@ struct CaptureIssueSheet: View {
                             .font(.system(size: 13))
                             .padding(8)
                             .background(
-                                RoundedRectangle(cornerRadius: 6)
+                                RoundedRectangle(cornerRadius: ScopeTheme.Radius.small)
                                     .fill(Color(nsColor: .textBackgroundColor))
                             )
                             .overlay(
-                                RoundedRectangle(cornerRadius: 6)
+                                RoundedRectangle(cornerRadius: ScopeTheme.Radius.small)
                                     .stroke(Color(nsColor: .separatorColor).opacity(0.5), lineWidth: 0.5)
                             )
                     }
@@ -140,11 +140,11 @@ struct CaptureIssueSheet: View {
                             .frame(height: 80)
                             .padding(4)
                             .background(
-                                RoundedRectangle(cornerRadius: 6)
+                                RoundedRectangle(cornerRadius: ScopeTheme.Radius.small)
                                     .fill(Color(nsColor: .textBackgroundColor))
                             )
                             .overlay(
-                                RoundedRectangle(cornerRadius: 6)
+                                RoundedRectangle(cornerRadius: ScopeTheme.Radius.small)
                                     .stroke(Color(nsColor: .separatorColor).opacity(0.5), lineWidth: 0.5)
                             )
                             .scrollContentBackground(.hidden)
@@ -184,7 +184,7 @@ struct CaptureIssueSheet: View {
                                 }
                                 .frame(height: 100)
                                 .background(
-                                    RoundedRectangle(cornerRadius: 6)
+                                    RoundedRectangle(cornerRadius: ScopeTheme.Radius.small)
                                         .fill(Color(nsColor: .controlBackgroundColor))
                                 )
                             }
@@ -227,7 +227,7 @@ struct CaptureIssueSheet: View {
                                         .padding(.horizontal, 8)
                                         .padding(.vertical, 3)
                                         .background(
-                                            Capsule()
+                                            RoundedRectangle(cornerRadius: 4)
                                                 .fill(selectedLabels.contains(label)
                                                       ? TaskItem.labelColor(for: label).opacity(0.15)
                                                       : Color(nsColor: .separatorColor).opacity(0.1))

@@ -187,7 +187,7 @@ struct DevToolsPanel: View {
             if !el.classes.isEmpty {
                 Text(".\(el.classes.prefix(2).joined(separator: "."))")
                     .font(.system(size: 10, design: .monospaced))
-                    .foregroundColor(.orange)
+                    .foregroundColor(.white)
             }
 
             if let ref = el.axRef {
@@ -225,7 +225,7 @@ struct DevToolsPanel: View {
                                             .foregroundStyle(.tertiary)
                                         Text("\"\(value)\"")
                                             .font(.system(size: 11, design: .monospaced))
-                                            .foregroundColor(.orange)
+                                            .foregroundColor(.white)
                                             .lineLimit(3)
                                             .textSelection(.enabled)
                                     }
@@ -287,14 +287,14 @@ struct DevToolsPanel: View {
 
                 if let id = el.id, !id.isEmpty {
                     Text(" id")
-                        .foregroundColor(.orange)
+                        .foregroundColor(.white)
                     Text("=\"\(id)\"")
                         .foregroundColor(.green)
                 }
 
                 if !el.classes.isEmpty {
                     Text(" class")
-                        .foregroundColor(.orange)
+                        .foregroundColor(.white)
                     Text("=\"\(el.classes.joined(separator: " "))\"")
                         .foregroundColor(.green)
                 }
@@ -330,7 +330,7 @@ struct DevToolsPanel: View {
             if let id = summary.elementId, !id.isEmpty {
                 Text("#\(id)")
                     .font(.system(size: 11, design: .monospaced))
-                    .foregroundColor(.orange)
+                    .foregroundColor(.white)
             }
 
             if !summary.classes.isEmpty {
@@ -429,7 +429,7 @@ struct DevToolsPanel: View {
 
     @ViewBuilder
     private func boxModelDiagram(_ box: BoxModelData) -> some View {
-        let marginColor = Color.orange.opacity(0.15)
+        let marginColor = Color.white.opacity(0.15)
         let borderColor = Color.yellow.opacity(0.2)
         let paddingColor = Color.green.opacity(0.15)
         let contentColor = Color.blue.opacity(0.15)
@@ -440,17 +440,17 @@ struct DevToolsPanel: View {
                 .fill(marginColor)
                 .overlay(
                     RoundedRectangle(cornerRadius: 4)
-                        .stroke(Color.orange.opacity(0.3), lineWidth: 1)
+                        .stroke(Color.white.opacity(0.3), lineWidth: 1)
                 )
 
             VStack(spacing: 0) {
                 boxDimensionLabel(String(format: "%.0f", box.margin.top))
-                    .foregroundColor(.orange)
+                    .foregroundColor(.white)
                     .padding(.top, 4)
 
                 HStack(spacing: 0) {
                     boxDimensionLabel(String(format: "%.0f", box.margin.left))
-                        .foregroundColor(.orange)
+                        .foregroundColor(.white)
                         .padding(.leading, 4)
 
                     // Border layer
@@ -530,12 +530,12 @@ struct DevToolsPanel: View {
                     .padding(4)
 
                     boxDimensionLabel(String(format: "%.0f", box.margin.right))
-                        .foregroundColor(.orange)
+                        .foregroundColor(.white)
                         .padding(.trailing, 4)
                 }
 
                 boxDimensionLabel(String(format: "%.0f", box.margin.bottom))
-                    .foregroundColor(.orange)
+                    .foregroundColor(.white)
                     .padding(.bottom, 4)
             }
         }
@@ -543,7 +543,7 @@ struct DevToolsPanel: View {
 
         // Legend
         HStack(spacing: 12) {
-            legendItem("margin", .orange)
+            legendItem("margin", .white)
             legendItem("border", .yellow)
             legendItem("padding", .green)
             legendItem("content", .blue)
@@ -1203,7 +1203,7 @@ struct DevToolsPanel: View {
             if httpOnly {
                 Text("H")
                     .font(.system(size: 8, weight: .bold))
-                    .foregroundColor(.orange)
+                    .foregroundColor(.white)
                     .help("HttpOnly")
             }
             if secure {

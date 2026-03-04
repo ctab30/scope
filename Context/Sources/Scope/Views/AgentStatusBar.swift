@@ -15,6 +15,7 @@ struct AgentStatusBar: View {
                     Circle()
                         .fill(Color.green)
                         .frame(width: 6, height: 6)
+                        .accessibilityLabel("Claude Code running")
                     Text("Claude Code")
                         .font(.system(size: 10, weight: .medium))
                         .foregroundColor(.secondary)
@@ -46,10 +47,10 @@ struct AgentStatusBar: View {
                         HStack(spacing: 3) {
                             Image(systemName: "exclamationmark.triangle.fill")
                                 .font(.system(size: 9))
-                                .foregroundColor(.orange)
+                                .foregroundColor(.white)
                             Text("Agent may be frozen")
                                 .font(.system(size: 10, weight: .medium))
-                                .foregroundColor(.orange)
+                                .foregroundColor(.white)
                         }
                     }
                 }
@@ -67,7 +68,7 @@ struct AgentPill: View {
     let agent: AgentMonitor.AgentInfo
 
     private var statusColor: Color {
-        agent.isPotentiallyFrozen ? .orange : .blue
+        agent.isPotentiallyFrozen ? .white : .blue
     }
 
     var body: some View {

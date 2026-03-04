@@ -349,7 +349,7 @@ private struct MarkdownContentView: View {
                 let inner = remaining[remaining.index(after: remaining.startIndex)..<endIdx]
                 result = result + Text(inner)
                     .font(ScopeTheme.Font.mono)
-                    .foregroundColor(Color(nsColor: .systemOrange))
+                    .foregroundColor(Color(nsColor: .systemGray))
                 remaining = remaining[remaining.index(after: endIdx)...]
                 continue
             }

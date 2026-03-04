@@ -298,7 +298,7 @@ struct SyntaxHighlighter {
     // MARK: - Colors
 
     private static let keywordColor = NSColor.systemPurple
-    private static let stringColor = NSColor.systemOrange
+    private static let stringColor = NSColor.systemGray
     private static let commentColor = NSColor.systemGreen
     private static let numberColor = NSColor.systemBlue
     private static let typeColor = NSColor.systemTeal

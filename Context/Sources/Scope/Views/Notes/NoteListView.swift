@@ -227,7 +227,7 @@ struct NoteRow: View {
             if note.pinned {
                 Image(systemName: "pin.fill")
                     .font(ScopeTheme.Font.tag)
-                    .foregroundColor(.orange)
+                    .foregroundColor(.white)
             }
 
             VStack(alignment: .leading, spacing: ScopeTheme.Spacing.xxxs) {

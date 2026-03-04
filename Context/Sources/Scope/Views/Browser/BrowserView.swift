@@ -159,6 +159,7 @@ struct BrowserView: View {
             .buttonStyle(.plain)
             .disabled(viewModel.activeTab?.canGoBack != true)
             .foregroundColor(viewModel.activeTab?.canGoBack == true ? .primary : .secondary.opacity(0.4))
+            .help("Back")
 
             // Forward
             Button {
@@ -172,6 +173,7 @@ struct BrowserView: View {
             .buttonStyle(.plain)
             .disabled(viewModel.activeTab?.canGoForward != true)
             .foregroundColor(viewModel.activeTab?.canGoForward == true ? .primary : .secondary.opacity(0.4))
+            .help("Forward")
 
             // Reload / Stop
             Button {
@@ -191,6 +193,7 @@ struct BrowserView: View {
             .buttonStyle(.plain)
             .disabled(viewModel.activeTab == nil)
             .foregroundColor(viewModel.activeTab != nil ? .primary : .secondary.opacity(0.4))
+            .help(viewModel.activeTab?.isLoading == true ? "Stop" : "Reload")
 
             // URL field
             TextField("Enter URL", text: $urlText)
@@ -230,6 +233,7 @@ struct BrowserView: View {
             .buttonStyle(.plain)
             .disabled(viewModel.activeTab == nil)
             .foregroundColor(viewModel.activeTab != nil ? .primary : .secondary.opacity(0.4))
+            .help("Screenshot")
 
             // Capture Issue
             Button {
@@ -266,7 +270,7 @@ struct BrowserView: View {
                             .padding(.vertical, 1)
                             .background(
                                 Capsule()
-                                    .fill(tab.errorCount > 0 ? Color.red : (tab.warningCount > 0 ? Color.orange : Color.secondary))
+                                    .fill(tab.errorCount > 0 ? Color.red : (tab.warningCount > 0 ? Color.white : Color.secondary))
                             )
                             .offset(x: 4, y: -2)
                     }
@@ -275,6 +279,7 @@ struct BrowserView: View {
             .buttonStyle(.plain)
             .disabled(viewModel.activeTab == nil)
             .foregroundColor(viewModel.activeTab != nil ? .primary : .secondary.opacity(0.4))
+            .help("Console")
             .popover(isPresented: $showConsolePopover, arrowEdge: .bottom) {
                 if let tab = viewModel.activeTab {
                     ConsoleLogPopover(tab: tab)
@@ -323,6 +328,7 @@ struct BrowserView: View {
             }
             .buttonStyle(.plain)
             .padding(.leading, ScopeTheme.Spacing.xxxs)
+            .help("New Tab")
 
             Spacer()
         }
@@ -364,6 +370,7 @@ struct BrowserView: View {
                         )
                 }
                 .buttonStyle(.plain)
+                .help("Close Tab")
             }
         }
         .padding(.horizontal, ScopeTheme.Spacing.sm)

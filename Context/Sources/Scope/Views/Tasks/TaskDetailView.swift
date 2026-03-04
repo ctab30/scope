@@ -73,9 +73,7 @@ struct TaskDetailView: View {
                             .foregroundColor(.secondary)
 
                         Picker("Project", selection: $selectedProjectId) {
-                            Text("None (Global only)")
-                                .tag("__global__")
-                            ForEach(appState.projects) { project in
+                            ForEach(appState.projects.filter { $0.id != "__global__" }) { project in
                                 Text(projectPickerLabel(project))
                                     .tag(project.id)
                             }
@@ -133,7 +131,7 @@ struct TaskDetailView: View {
                                 Text(error)
                                     .font(ScopeTheme.Font.caption)
                             }
-                            .foregroundColor(.orange)
+                            .foregroundColor(.white)
                         }
                     }
 

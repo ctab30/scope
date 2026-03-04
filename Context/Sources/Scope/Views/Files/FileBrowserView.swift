@@ -162,15 +162,15 @@ struct FileBrowserView: View {
                         HStack(spacing: ScopeTheme.Spacing.xs) {
                             Image(systemName: "exclamationmark.triangle.fill")
                                 .font(ScopeTheme.Font.footnote)
-                                .foregroundColor(.orange)
+                                .foregroundColor(.white)
                             Text("File truncated — showing first portion only")
                                 .font(ScopeTheme.Font.footnote)
-                                .foregroundColor(.orange)
+                                .foregroundColor(.white)
                             Spacer()
                         }
                         .padding(.horizontal, ScopeTheme.Spacing.md)
                         .padding(.vertical, ScopeTheme.Spacing.xs)
-                        .background(Color.orange.opacity(ScopeTheme.Opacity.hover))
+                        .background(Color.white.opacity(ScopeTheme.Opacity.hover))
                     }
 
                     if isEditMode {

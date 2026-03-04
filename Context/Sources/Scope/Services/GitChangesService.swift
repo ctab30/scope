@@ -24,7 +24,7 @@ enum GitFileStatus: String, CaseIterable {
 
     var color: Color {
         switch self {
-        case .modified: return .orange
+        case .modified: return .white
         case .added: return .green
         case .deleted: return .red
         case .renamed: return .blue

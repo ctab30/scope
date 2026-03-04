@@ -1,6 +1,7 @@
 import SwiftUI
 import SwiftTerm
 import AppKit
+import UserNotifications
 
 /// Tracks all active terminal views so they can be terminated on app quit.
 final class TerminalTracker {
@@ -184,12 +185,13 @@ struct ScopeApp: App {
                 .environmentObject(contextEngine)
                 .environmentObject(updateService)
                 .preferredColorScheme(.dark)
-                .accentColor(Color(red: 0.976, green: 0.451, blue: 0.086)) // Scope orange (#f97316)
+                .tint(.white)
                 .onAppear {
                     NSApplication.shared.activate(ignoringOtherApps: true)
                     appState.loadProjects()
                     contextEngine.startPollingForRequests()
                     notificationService.observeClaudeExitNotifications()
+                    notificationService.observeNeedsAttentionNotifications()
                     // Show onboarding wizard on first launch
                     if !UserDefaults.standard.bool(forKey: "hasCompletedOnboarding") {
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
@@ -255,6 +257,28 @@ struct ScopeApp: App {
         }
         .windowStyle(.hiddenTitleBar)
         .defaultSize(width: 1400, height: 900)
+        .commands {
+            CommandGroup(replacing: .newItem) {
+                Button("New Terminal Tab") {
+                    NotificationCenter.default.post(name: .init("NewTerminalTab"), object: nil)
+                }
+                .keyboardShortcut("t", modifiers: .command)
+            }
+
+            CommandGroup(after: .newItem) {
+                Button("Open Folder...") {
+                    NotificationCenter.default.post(name: .init("OpenFolder"), object: nil)
+                }
+                .keyboardShortcut("o", modifiers: [.command, .shift])
+            }
+
+            CommandGroup(replacing: .sidebar) {
+                Button("Toggle Sidebar") {
+                    NotificationCenter.default.post(name: .init("ToggleSidebar"), object: nil)
+                }
+                .keyboardShortcut("s", modifiers: [.command, .option])
+            }
+        }
 
         WindowGroup(for: String.self) { $projectId in
             if let projectId {
@@ -272,11 +296,18 @@ struct ScopeApp: App {
 
     // MARK: - Deep Link Handling
 
-    /// Handle scope:// deep links for one-click MCP onboarding.
-    /// Format: scope://install-mcp?client=claude
+    /// Handle scope:// deep links.
     private func handleDeepLink(_ url: URL) {
-        guard url.scheme == "scope",
-              url.host == "install-mcp",
+        guard url.scheme == "scope" else { return }
+
+        // scope://needs-attention?project=<id>&titles=<titles>
+        if url.host == "needs-attention" {
+            handleNeedsAttentionLink(url)
+            return
+        }
+
+        // scope://install-mcp?client=claude
+        guard url.host == "install-mcp",
               let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
               let clientParam = components.queryItems?.first(where: { $0.name == "client" })?.value,
               let cli = CLIProvider(rawValue: clientParam) else {
@@ -314,5 +345,31 @@ struct ScopeApp: App {
             deepLinkResult = .failure(error.localizedDescription)
         }
         showDeepLinkSheet = true
+    }
+
+    /// Handle scope://needs-attention?project=<id>&titles=<titles>
+    /// Sends a native macOS notification with Scope's app icon.
+    private func handleNeedsAttentionLink(_ url: URL) {
+        guard let components = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return }
+        let titles = components.queryItems?.first(where: { $0.name == "titles" })?.value ?? "Tasks need your attention"
+        let projectId = components.queryItems?.first(where: { $0.name == "project" })?.value
+
+        let content = UNMutableNotificationContent()
+        content.title = "Needs Attention"
+        content.body = titles
+        content.sound = .default
+
+        let request = UNNotificationRequest(
+            identifier: "needsAttention-\(UUID().uuidString)",
+            content: content,
+            trigger: nil
+        )
+        UNUserNotificationCenter.current().add(request)
+
+        // Also post internal notification to refresh views
+        NotificationCenter.default.post(name: .tasksDidChange, object: nil)
+        if let projectId {
+            NotificationCenter.default.post(name: .tasksNeedAttention, object: nil, userInfo: ["projectName": projectId])
+        }
     }
 }

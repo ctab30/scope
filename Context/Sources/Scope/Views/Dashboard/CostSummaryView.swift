@@ -184,7 +184,7 @@ struct CostSummaryView: View {
 
     private func costColor(_ cost: Double) -> Color {
         if cost > 10 { return .red }
-        if cost > 5 { return .orange }
+        if cost > 5 { return .white }
         return .green
     }
 
@@ -298,7 +298,7 @@ struct DailyCostChart: View {
 
     private func barColor(_ cost: Double) -> Color {
         if cost == 0 { return Color(nsColor: .separatorColor).opacity(0.3) }
-        if cost > 5 { return .orange.opacity(0.7) }
+        if cost > 5 { return .white.opacity(0.7) }
         return .green.opacity(0.6)
     }
 }

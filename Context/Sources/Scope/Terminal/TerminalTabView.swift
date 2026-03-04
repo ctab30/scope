@@ -20,6 +20,27 @@ enum LaunchTaskKey {
 ///
 /// Listens for `.launchTask` notifications from the GUI side to create new
 /// tabs that auto-run Claude commands.
+/// AppKit `NSVisualEffectView` wrapped for SwiftUI — provides the
+/// frosted-glass / vibrancy backdrop behind the terminal.
+struct TerminalVibrancyView: NSViewRepresentable {
+    var material: NSVisualEffectView.Material = .hudWindow
+    var blendingMode: NSVisualEffectView.BlendingMode = .behindWindow
+
+    func makeNSView(context: Context) -> NSVisualEffectView {
+        let view = NSVisualEffectView()
+        view.material = material
+        view.blendingMode = blendingMode
+        view.state = .active          // always active, even when window is not key
+        view.isEmphasized = true
+        return view
+    }
+
+    func updateNSView(_ nsView: NSVisualEffectView, context: Context) {
+        nsView.material = material
+        nsView.blendingMode = blendingMode
+    }
+}
+
 struct TerminalTabView: View {
     @Binding var projectPath: String
     var projectId: String = ""
@@ -46,6 +67,7 @@ struct TerminalTabView: View {
                 }
                 .buttonStyle(.plain)
                 .padding(.leading, ScopeTheme.Spacing.xxxs)
+                .help("New Tab")
 
                 Spacer()
 
@@ -66,6 +88,8 @@ struct TerminalTabView: View {
 
             // Terminal content — all tabs stay alive in a ZStack,
             // only the selected tab is visible and interactive.
+            // Screen blend makes the black bg transparent, showing the
+            // window's ultraThinMaterial seamlessly (same as the sidebar).
             ZStack {
                 ForEach(tabs) { tab in
                     let isActive = tab.id == selectedTabId
@@ -82,6 +106,7 @@ struct TerminalTabView: View {
                             }
                         }
                     )
+                    .blendMode(.screen)
                     .opacity(isActive ? 1 : 0)
                     .allowsHitTesting(isActive)
                 }
@@ -151,13 +176,59 @@ struct TerminalTabView: View {
     }
 
     private func launchTask(title: String, command: String) {
+        let injectedCommand = injectClaudeHooks(command: command, projectId: projectId)
         let tab = TerminalTab(
             title: title,
             initialDirectory: projectPath,
-            initialCommand: command
+            initialCommand: injectedCommand
         )
         tabs.append(tab)
         selectedTabId = tab.id
+    }
+
+    /// If the command launches Claude Code, inject `--settings` with a Notification hook
+    /// that automatically moves in_progress tasks to needs_attention when Claude is waiting.
+    private func injectClaudeHooks(command: String, projectId: String) -> String {
+        // Only inject for claude commands
+        let trimmed = command.trimmingCharacters(in: .whitespaces)
+        guard trimmed == "claude" || trimmed.hasPrefix("claude ") else { return command }
+        guard !projectId.isEmpty else { return command }
+
+        // Use ~/.scope/hooks/ — no spaces in path (critical for hook command execution)
+        let homeDir = FileManager.default.homeDirectoryForCurrentUser
+        let hooksDir = homeDir.appendingPathComponent(".scope/hooks", isDirectory: true)
+        try? FileManager.default.createDirectory(at: hooksDir, withIntermediateDirectories: true)
+
+        let dbPath = FileManager.default.urls(
+            for: .applicationSupportDirectory,
+            in: .userDomainMask
+        ).first!.appendingPathComponent("Scope/scope.db").path
+
+        // Write the hook script — queries task titles, updates DB, triggers Scope notification via deep link
+        let scriptPath = hooksDir.appendingPathComponent("needs-attention-\(projectId).sh")
+        let lines = [
+            "#!/bin/bash",
+            "TITLES=$(/usr/bin/sqlite3 '\(dbPath)' \"SELECT title FROM taskItems WHERE projectId = '\(projectId)' AND status = 'in_progress' LIMIT 3;\" 2>/dev/null | paste -sd', ' -)",
+            "[ -z \"$TITLES\" ] && exit 0",
+            "/usr/bin/sqlite3 '\(dbPath)' \"UPDATE taskItems SET status = 'needs_attention' WHERE projectId = '\(projectId)' AND status = 'in_progress';\"",
+            "ENCODED=$(python3 -c \"import urllib.parse; print(urllib.parse.quote('$TITLES'))\")",
+            "open \"scope://needs-attention?project=\(projectId)&titles=$ENCODED\""
+        ]
+        try? lines.joined(separator: "\n").appending("\n").write(to: scriptPath, atomically: true, encoding: .utf8)
+        try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: scriptPath.path)
+
+        // Write hooks settings JSON to a file (--settings accepts a file path)
+        let settingsPath = hooksDir.appendingPathComponent("settings-\(projectId).json")
+        let settingsJSON = "{\"hooks\":{\"Notification\":[{\"matcher\":\"\",\"hooks\":[{\"type\":\"command\",\"command\":\"\(scriptPath.path)\",\"timeout\":10}]}],\"Stop\":[{\"matcher\":\"\",\"hooks\":[{\"type\":\"command\",\"command\":\"\(scriptPath.path)\",\"timeout\":10}]}]}}"
+        try? settingsJSON.write(to: settingsPath, atomically: true, encoding: .utf8)
+
+        // Inject --settings pointing to the file (no spaces in path, no escaping needed)
+        if trimmed == "claude" {
+            return "claude --settings \(settingsPath.path)"
+        } else {
+            let rest = String(trimmed.dropFirst("claude ".count))
+            return "claude --settings \(settingsPath.path) \(rest)"
+        }
     }
 
     private func closeTab(_ tab: TerminalTab) {
@@ -195,6 +266,7 @@ struct TerminalTabView: View {
                         )
                 }
                 .buttonStyle(.plain)
+                .help("Close Tab")
                 .opacity(isSelected ? 1 : 0)
             }
         }

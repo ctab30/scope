@@ -17,9 +17,9 @@ struct ProjectSidebarView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Top spacer for title bar
+            // Top spacer for title bar + traffic light buttons
             Spacer()
-                .frame(height: 10)
+                .frame(height: 38)
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 2) {

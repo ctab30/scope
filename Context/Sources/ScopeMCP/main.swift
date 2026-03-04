@@ -87,7 +87,7 @@ struct TaskItem: Codable, FetchableRecord, MutablePersistableRecord {
     var completedAt: Date?
     var labels: String?
     var attachments: String?
-    var isGlobal: Bool
+    var isGlobal: Bool = false
     static let databaseTableName = "taskItems"
 
     mutating func didInsert(_ inserted: InsertionSuccess) {
@@ -284,13 +284,19 @@ class MCPConnectionStatus {
         try? FileManager.default.removeItem(at: statusFile)
     }
 
+    private var initialConnectedAt: String?
+
     private func writeStatus(projectId: String?, projectName: String?, cwd: String) {
+        if initialConnectedAt == nil {
+            initialConnectedAt = ISO8601DateFormatter().string(from: Date())
+        }
         let status: [String: Any] = [
             "pid": Int(pid),
             "cwd": cwd,
             "projectId": projectId as Any,
             "projectName": projectName as Any,
-            "connectedAt": ISO8601DateFormatter().string(from: Date()),
+            "connectedAt": initialConnectedAt as Any,
+            "lastActivityAt": ISO8601DateFormatter().string(from: Date()),
         ]
         if let data = try? JSONSerialization.data(withJSONObject: status.compactMapValues { $0 }) {
             try? data.write(to: statusFile, options: .atomic)
@@ -644,8 +650,7 @@ class MCPServer {
                     "type": "object",
                     "properties": [
                         "project_id": ["type": "string", "description": "Project ID (auto-detected if omitted)"],
-                        "status": ["type": "string", "description": "Filter by status: todo, in_progress, done. Omit for all.", "enum": ["todo", "in_progress", "done"]],
-                        "global": ["type": "boolean", "description": "Set true to list global planner tasks instead of project tasks"],
+                        "status": ["type": "string", "description": "Filter by status: todo, in_progress, needs_attention, done. Omit for all.", "enum": ["todo", "in_progress", "needs_attention", "done"]],
                     ]
                 ]
             ],
@@ -671,19 +676,18 @@ class MCPServer {
                         "description": ["type": "string", "description": "Task description (optional)"],
                         "priority": ["type": "integer", "description": "Priority: 0=none, 1=low, 2=medium, 3=high, 4=urgent"],
                         "labels": ["type": "array", "items": ["type": "string"], "description": "Labels (e.g. bug, feature, refactor)"],
-                        "global": ["type": "boolean", "description": "Set true to create a global planner task (visible on home board)"],
                     ],
                     "required": ["title"]
                 ]
             ],
             [
                 "name": "update_task",
-                "description": "Update a task's fields (status, priority, title, description, labels).",
+                "description": "Update a task's fields. Set status to 'needs_attention' when blocked, waiting for user input, or requiring human review before continuing.",
                 "inputSchema": [
                     "type": "object",
                     "properties": [
                         "task_id": ["type": "integer", "description": "Task ID"],
-                        "status": ["type": "string", "description": "New status", "enum": ["todo", "in_progress", "done"]],
+                        "status": ["type": "string", "description": "New status", "enum": ["todo", "in_progress", "needs_attention", "done"]],
                         "priority": ["type": "integer", "description": "New priority (0-4)"],
                         "title": ["type": "string", "description": "New title"],
                         "description": ["type": "string", "description": "New description"],
@@ -1390,27 +1394,14 @@ class MCPServer {
     }
 
     func listTasks(_ args: [String: Any]) throws -> String {
-        let isGlobal = args["global"] as? Bool ?? false
-
-        let tasks: [TaskItem]
-        if isGlobal {
-            tasks = try db.read { db in
-                var query = TaskItem.filter(Column("isGlobal") == true)
-                if let status = args["status"] as? String {
-                    query = query.filter(Column("status") == status)
-                }
-                return try query.order(Column("priority").desc, Column("createdAt").desc).fetchAll(db)
+        let projectId = try resolveProjectId(args)
+        let statusFilter = args["status"] as? String
+        let tasks: [TaskItem] = try db.read { db -> [TaskItem] in
+            var query = TaskItem.filter(Column("projectId") == projectId)
+            if let status = statusFilter {
+                query = query.filter(Column("status") == status)
             }
-        } else {
-            let projectId = try resolveProjectId(args)
-            let statusFilter = args["status"] as? String
-            tasks = try db.read { db -> [TaskItem] in
-                var query = TaskItem.filter(Column("projectId") == projectId)
-                if let status = statusFilter {
-                    query = query.filter(Column("status") == status)
-                }
-                return try query.order(Column("priority").desc, Column("createdAt").desc).fetchAll(db)
-            }
+            return try query.order(Column("priority").desc, Column("createdAt").desc).fetchAll(db)
         }
 
         if tasks.isEmpty {
@@ -1478,13 +1469,7 @@ class MCPServer {
     }
 
     func createTask(_ args: [String: Any]) throws -> String {
-        let isGlobal = args["global"] as? Bool ?? false
-        let projectId: String
-        if isGlobal {
-            projectId = "__global__"
-        } else {
-            projectId = try resolveProjectId(args)
-        }
+        let projectId = try resolveProjectId(args)
         guard let title = args["title"] as? String, !title.isEmpty else {
             throw MCPError(message: "title is required")
         }
@@ -1512,8 +1497,7 @@ class MCPServer {
             createdAt: Date(),
             completedAt: nil,
             labels: labelsJSON,
-            attachments: nil,
-            isGlobal: isGlobal
+            attachments: nil
         )
 
         try db.write { db in

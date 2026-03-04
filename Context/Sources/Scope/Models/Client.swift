@@ -26,6 +26,6 @@ struct Client: Codable, Identifiable, Equatable, FetchableRecord, MutablePersist
         "#8B5CF6", // purple
         "#EC4899", // pink
         "#06B6D4", // cyan
-        "#F97316", // orange
+        "#FFFFFF", // white
     ]
 }

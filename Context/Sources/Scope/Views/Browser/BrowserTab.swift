@@ -23,7 +23,7 @@ struct ConsoleLogEntry: Identifiable {
     var color: Color {
         switch level {
         case "error": return .red
-        case "warn":  return .orange
+        case "warn":  return .white
         case "info":  return .blue
         default:      return .secondary
         }

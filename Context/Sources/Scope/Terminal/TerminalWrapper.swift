@@ -12,6 +12,9 @@ final class FocusableTerminalView: LocalProcessTerminalView {
     /// Guards focus-claiming so hidden terminals in a ZStack don't steal input.
     var isActiveTab: Bool = true
 
+    /// Allow transparency so the window's vibrancy material shows through.
+    override var isOpaque: Bool { false }
+
     // MARK: - Lifecycle
 
     override func viewDidMoveToWindow() {
@@ -227,6 +230,7 @@ struct TerminalWrapper: NSViewRepresentable {
     func makeNSView(context: NSViewRepresentableContext<TerminalWrapper>) -> FocusableTerminalView {
         let terminal = FocusableTerminalView(frame: .zero)
         terminal.font = NSFont.monospacedSystemFont(ofSize: 13, weight: .regular)
+
         terminal.processDelegate = context.coordinator
         context.coordinator.terminalView = terminal
 

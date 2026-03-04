@@ -41,13 +41,13 @@ struct SessionDetailView: View {
                 // Stats row
                 HStack(spacing: 10) {
                     DetailStat(icon: "message", label: "Messages", value: "\(session.messageCount)", color: .blue)
-                    DetailStat(icon: "wrench", label: "Tool Uses", value: "\(session.toolUseCount)", color: .orange)
+                    DetailStat(icon: "wrench", label: "Tool Uses", value: "\(session.toolUseCount)", color: .white)
                     DetailStat(icon: "doc", label: "Files", value: "\(session.filesChangedArray.count)", color: .green)
                     DetailStat(
                         icon: "dollarsign.circle",
                         label: "Cost",
                         value: String(format: "$%.2f", session.estimatedCost),
-                        color: session.estimatedCost > 1 ? .orange : .green
+                        color: session.estimatedCost > 1 ? .white : .green
                     )
                 }
 
@@ -172,7 +172,7 @@ struct SessionDetailView: View {
                         .padding(.horizontal, 8)
                         .padding(.vertical, 3)
                         .background(
-                            Capsule().fill(Color.purple.opacity(0.1))
+                            RoundedRectangle(cornerRadius: 4).fill(Color.purple.opacity(0.1))
                         )
                     }
                     .buttonStyle(.plain)
@@ -229,7 +229,7 @@ struct SessionDetailView: View {
                 HStack(spacing: 6) {
                     Image(systemName: "exclamationmark.triangle")
                         .font(.system(size: 11))
-                        .foregroundColor(.orange)
+                        .foregroundColor(.white)
                     Text(error)
                         .font(.system(size: 11))
                         .foregroundColor(.secondary)
@@ -238,7 +238,7 @@ struct SessionDetailView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(
                     RoundedRectangle(cornerRadius: 8)
-                        .fill(Color.orange.opacity(0.05))
+                        .fill(Color.white.opacity(0.05))
                 )
             } else {
                 Text("No summary available")
@@ -302,7 +302,7 @@ struct SessionDetailView: View {
                 HStack(spacing: 4) {
                     Image(systemName: "exclamationmark.triangle")
                         .font(.system(size: 10))
-                        .foregroundColor(.orange)
+                        .foregroundColor(.white)
                     Text(error)
                         .font(.system(size: 10))
                         .foregroundColor(.secondary)
@@ -423,7 +423,7 @@ struct DetailBadge: View {
         .padding(.horizontal, 8)
         .padding(.vertical, 3)
         .background(
-            Capsule()
+            RoundedRectangle(cornerRadius: 4)
                 .fill(color == .secondary
                       ? Color(nsColor: .separatorColor).opacity(0.12)
                       : color.opacity(0.1))

@@ -76,7 +76,7 @@ struct ScreenshotAnnotationView: View {
 
     private let toolbarColors: [(label: String, color: Color, nsColor: NSColor)] = [
         ("Red", .red, .systemRed),
-        ("Orange", .orange, .systemOrange),
+        ("Orange", .white, .systemGray),
         ("Yellow", .yellow, .systemYellow),
         ("Green", .green, .systemGreen),
         ("Blue", .blue, .systemBlue),
@@ -111,7 +111,7 @@ struct ScreenshotAnnotationView: View {
                             .font(.system(size: 12, weight: .medium))
                             .frame(width: 28, height: 28)
                             .background(
-                                RoundedRectangle(cornerRadius: 6)
+                                RoundedRectangle(cornerRadius: ScopeTheme.Radius.small)
                                     .fill(selectedTool == tool
                                           ? Color.accentColor.opacity(0.2)
                                           : Color.clear)

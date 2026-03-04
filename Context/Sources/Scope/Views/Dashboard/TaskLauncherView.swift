@@ -169,7 +169,7 @@ struct TaskPreset: Identifiable {
             icon: "doc.text.fill",
             title: "Documentation",
             description: "Add or update docs",
-            color: .orange,
+            color: .white,
             promptTemplate: "Review the codebase and add or improve documentation. Focus on public APIs, complex logic, and architecture decisions that need explaining."
         ),
         TaskPreset(

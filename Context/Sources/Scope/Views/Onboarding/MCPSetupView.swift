@@ -121,7 +121,7 @@ struct MCPSetupView: View {
         case .failed:
             Image(systemName: "exclamationmark.triangle.fill")
                 .font(ScopeTheme.Font.headline)
-                .foregroundColor(.orange)
+                .foregroundColor(.white)
         }
     }
 

@@ -8,6 +8,8 @@ extension Notification.Name {
     static let tasksDidChange = Notification.Name("tasksDidChange")
     /// Posted when a Claude Code process exits (transitions from running to not-running).
     static let claudeProcessDidExit = Notification.Name("claudeProcessDidExit")
+    /// Posted when tasks move to needs_attention (carries optional "projectName" in userInfo).
+    static let tasksNeedAttention = Notification.Name("tasksNeedAttention")
 }
 
 @MainActor

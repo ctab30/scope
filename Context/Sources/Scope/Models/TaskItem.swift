@@ -8,7 +8,7 @@ struct TaskItem: Codable, Identifiable, FetchableRecord, MutablePersistableRecor
     var projectId: String
     var title: String
     var description: String?
-    var status: String // "todo", "in_progress", "done"
+    var status: String // "todo", "in_progress", "needs_attention", "done"
     var priority: Int
     var sourceSession: String?
     var source: String // "claude", "manual", "ai-extracted"
@@ -51,7 +51,7 @@ struct TaskItem: Codable, Identifiable, FetchableRecord, MutablePersistableRecor
             case .none:   return .secondary
             case .low:    return .blue
             case .medium: return .yellow
-            case .high:   return .orange
+            case .high:   return .white
             case .urgent: return .red
             }
         }
@@ -133,7 +133,7 @@ struct TaskItem: Codable, Identifiable, FetchableRecord, MutablePersistableRecor
         case "refactor":    return .purple
         case "test":        return .green
         case "docs":        return .mint
-        case "performance": return .orange
+        case "performance": return .white
         case "security":    return .pink
         case "design":      return .cyan
         case "email":       return .green

@@ -116,7 +116,7 @@ struct SessionRow: View {
                 if session.estimatedCost > 0 {
                     Label(String(format: "$%.2f", session.estimatedCost), systemImage: "dollarsign.circle")
                         .font(ScopeTheme.Font.caption)
-                        .foregroundColor(session.estimatedCost > 1 ? .orange : .green)
+                        .foregroundColor(session.estimatedCost > 1 ? .white : .green)
                 }
                 if let branch = session.gitBranch {
                     Label(settings.demoMode ? DemoContent.shared.mask(branch, as: .gitBranch) : branch, systemImage: "arrow.triangle.branch")

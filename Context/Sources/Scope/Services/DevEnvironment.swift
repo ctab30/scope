@@ -25,7 +25,7 @@ enum ProjectType: String, CaseIterable {
         case .node: return .green
         case .flutter: return .cyan
         case .python: return .yellow
-        case .swift: return .orange
+        case .swift: return .white
         case .unknown: return .gray
         }
     }
@@ -196,7 +196,7 @@ class DevEnvironment: ObservableObject {
             subtitle: "Install dependencies",
             command: "\(pm) install",
             icon: "arrow.down.circle.fill",
-            color: .orange
+            color: .white
         ))
 
         return cmds
@@ -242,7 +242,7 @@ class DevEnvironment: ObservableObject {
                 subtitle: "Build release",
                 command: "flutter build",
                 icon: "hammer.fill",
-                color: .orange
+                color: .white
             ),
             DevCommand(
                 id: "flutter-pub-get",
@@ -250,7 +250,7 @@ class DevEnvironment: ObservableObject {
                 subtitle: "Get dependencies",
                 command: "flutter pub get",
                 icon: "arrow.down.circle.fill",
-                color: .orange
+                color: .white
             ),
         ]
     }
@@ -290,7 +290,7 @@ class DevEnvironment: ObservableObject {
             subtitle: "Install requirements",
             command: "pip install -r requirements.txt",
             icon: "arrow.down.circle.fill",
-            color: .orange
+            color: .white
         ))
 
         return cmds
@@ -304,7 +304,7 @@ class DevEnvironment: ObservableObject {
                 subtitle: "Build package",
                 command: "swift build",
                 icon: "hammer.fill",
-                color: .orange
+                color: .white
             ),
             DevCommand(
                 id: "swift-test",

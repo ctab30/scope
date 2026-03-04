@@ -186,7 +186,7 @@ struct GitHubTabView: View {
                         .foregroundColor(.white)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 1)
-                        .background(Capsule().fill(Color.secondary.opacity(0.5)))
+                        .background(RoundedRectangle(cornerRadius: 4).fill(Color.secondary.opacity(0.5)))
                 }
 
                 Spacer()
@@ -260,10 +260,10 @@ struct GitHubTabView: View {
                     if pr.isDraft {
                         Text("Draft")
                             .font(.system(size: 9, weight: .medium))
-                            .foregroundColor(.orange)
+                            .foregroundColor(.white)
                             .padding(.horizontal, 5)
                             .padding(.vertical, 1)
-                            .background(Capsule().fill(Color.orange.opacity(0.15)))
+                            .background(RoundedRectangle(cornerRadius: 4).fill(Color.white.opacity(0.15)))
                     }
 
                     Spacer()
@@ -426,7 +426,7 @@ struct GitHubTabView: View {
                                 .padding(.horizontal, 6)
                                 .padding(.vertical, 2)
                                 .background(
-                                    Capsule()
+                                    RoundedRectangle(cornerRadius: 4)
                                         .fill(Color(hex: label.color) ?? Color.secondary)
                                 )
                         }
@@ -463,7 +463,7 @@ struct GitHubTabView: View {
         case .pending:
             Image(systemName: "clock.fill")
                 .font(.system(size: 12))
-                .foregroundColor(.orange)
+                .foregroundColor(.white)
         case .none:
             EmptyView()
         }
@@ -483,7 +483,7 @@ struct GitHubTabView: View {
         case "REVIEW_REQUIRED":
             Image(systemName: "clock.fill")
                 .font(.system(size: 12))
-                .foregroundColor(.orange)
+                .foregroundColor(.white)
         default:
             EmptyView()
         }
@@ -507,7 +507,7 @@ struct GitHubTabView: View {
         case "in_progress", "queued", "requested", "waiting", "pending":
             Image(systemName: "arrow.triangle.2.circlepath")
                 .font(.system(size: 14))
-                .foregroundColor(.orange)
+                .foregroundColor(.white)
         default:
             Image(systemName: "questionmark.circle")
                 .font(.system(size: 14))

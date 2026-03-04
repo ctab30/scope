@@ -38,7 +38,7 @@ enum CLIProvider: String, CaseIterable, Codable, Identifiable, Hashable {
 
     var color: Color {
         switch self {
-        case .claude:   return .orange
+        case .claude:   return .white
         case .gemini:   return .blue
         case .codex:    return .green
         }

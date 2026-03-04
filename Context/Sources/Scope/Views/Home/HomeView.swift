@@ -24,6 +24,7 @@ struct ProjectTaskSummary: View {
         let name: String
         let todoCount: Int
         let inProgressCount: Int
+        let needsAttentionCount: Int
         let tag: String?
         let clientName: String?
         let clientColor: String?
@@ -40,7 +41,7 @@ struct ProjectTaskSummary: View {
                 Text("Active Tasks by Project")
                     .font(ScopeTheme.Font.footnoteSemibold)
                 Spacer()
-                Text("\(projectTasks.reduce(0) { $0 + $1.todoCount + $1.inProgressCount })")
+                Text("\(projectTasks.reduce(0) { $0 + $1.todoCount + $1.inProgressCount + $1.needsAttentionCount })")
                     .font(ScopeTheme.Font.caption)
                     .foregroundColor(.secondary)
             }
@@ -124,13 +125,24 @@ struct ProjectTaskSummary: View {
                     }
                 }
 
+                if pt.needsAttentionCount > 0 {
+                    HStack(spacing: 3) {
+                        Circle()
+                            .fill(Color.yellow)
+                            .frame(width: ScopeTheme.Spacing.xs, height: ScopeTheme.Spacing.xs)
+                        Text("\(pt.needsAttentionCount)")
+                            .font(ScopeTheme.Font.caption)
+                            .foregroundColor(.yellow)
+                    }
+                }
+
                 HStack(spacing: 3) {
                     Circle()
-                        .fill(Color.orange)
+                        .fill(Color.white)
                         .frame(width: ScopeTheme.Spacing.xs, height: ScopeTheme.Spacing.xs)
                     Text("\(pt.todoCount)")
                         .font(ScopeTheme.Font.caption)
-                        .foregroundColor(.orange)
+                        .foregroundColor(.white)
                 }
             }
             .padding(.horizontal, ScopeTheme.Spacing.md)
@@ -153,13 +165,14 @@ struct ProjectTaskSummary: View {
                 let rows = try Row.fetchAll(db, sql: """
                     SELECT p.id, p.name, p.tags, c.name as clientName, c.color as clientColor,
                         SUM(CASE WHEN t.status = 'todo' THEN 1 ELSE 0 END) as todoCount,
-                        SUM(CASE WHEN t.status = 'in_progress' THEN 1 ELSE 0 END) as inProgressCount
+                        SUM(CASE WHEN t.status = 'in_progress' THEN 1 ELSE 0 END) as inProgressCount,
+                        SUM(CASE WHEN t.status = 'needs_attention' THEN 1 ELSE 0 END) as needsAttentionCount
                     FROM taskItems t
                     JOIN projects p ON p.id = t.projectId
                     LEFT JOIN clients c ON c.id = p.clientId
                     WHERE t.status != 'done' AND t.projectId != '__global__'
                     GROUP BY p.id
-                    ORDER BY (todoCount + inProgressCount) DESC, p.name ASC
+                    ORDER BY (todoCount + inProgressCount + needsAttentionCount) DESC, p.name ASC
                     """)
                 return rows.map { row in
                     let tagsJSON: String? = row["tags"]
@@ -175,6 +188,7 @@ struct ProjectTaskSummary: View {
                         name: row["name"],
                         todoCount: row["todoCount"],
                         inProgressCount: row["inProgressCount"],
+                        needsAttentionCount: row["needsAttentionCount"],
                         tag: firstTag,
                         clientName: row["clientName"],
                         clientColor: row["clientColor"]
