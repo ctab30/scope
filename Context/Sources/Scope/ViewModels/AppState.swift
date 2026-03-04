@@ -17,15 +17,9 @@ class AppState: ObservableObject {
         case notes = "Notes"
         case files = "Files"
         case browser = "Browser"
-        case memory = "Memory"
-        case rules = "Rules"
-        case services = "Services"
         case git = "Git"
-        case images = "Images"
         case sessions = "Sessions"
         case dashboard = "Details"
-        case visualize = "Visualize"
-        case recordings = "Recordings"
 
         var icon: String {
             switch self {
@@ -33,23 +27,15 @@ class AppState: ObservableObject {
             case .notes: return "note.text"
             case .files: return "folder"
             case .browser: return "globe"
-            case .memory: return "brain"
-            case .rules: return "doc.text.magnifyingglass"
-            case .services: return "puzzlepiece.extension"
             case .git: return "arrow.triangle.branch"
-            case .images: return "photo.artframe"
             case .sessions: return "clock"
             case .dashboard: return "info.circle"
-            case .visualize: return "chart.dots.scatter"
-            case .recordings: return "waveform"
             }
         }
     }
 
     func loadProjects() {
         do {
-            let discovery = ProjectDiscovery()
-            try discovery.importProjects()
             projects = try DatabaseService.shared.dbQueue.read { db in
                 try Project.order(Project.Columns.lastOpened.desc).fetchAll(db)
             }
@@ -265,7 +251,7 @@ class AppState: ObservableObject {
             }
         }
 
-        let ungrouped = projects.filter { $0.clientId == nil }
+        let ungrouped = projects.filter { $0.clientId == nil && $0.id != "__global__" }
         if !ungrouped.isEmpty {
             groups.append((client: nil, projects: ungrouped))
         }

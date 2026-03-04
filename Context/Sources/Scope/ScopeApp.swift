@@ -56,15 +56,13 @@ struct ScopeApp: App {
     @StateObject private var projectAnalyzer = ProjectAnalyzer()
     @StateObject private var claudeService = ClaudeService()
     @StateObject private var githubService = GitHubService()
-    @StateObject private var oauthManager: GoogleOAuthManager
-    @StateObject private var gmailPoller: GmailPoller
     @StateObject private var contextEngine = ContextEngine()
-    @StateObject private var briefingService = BriefingService()
     @StateObject private var notificationService: SystemNotificationService
     @StateObject private var updateService = UpdateService.shared
 
     @State private var deepLinkResult: DeepLinkResult?
     @State private var showDeepLinkSheet = false
+    @State private var showOnboarding = false
 
     /// Result of a deep link installation attempt.
     private enum DeepLinkResult {
@@ -81,16 +79,10 @@ struct ScopeApp: App {
         // Migrate data from old "Context" paths before any DB/service init
         Self.migrateFromContext()
 
-        let oauth = GoogleOAuthManager()
-        _oauthManager = StateObject(wrappedValue: oauth)
-        let poller = GmailPoller(oauthManager: oauth)
-        _gmailPoller = StateObject(wrappedValue: poller)
-
         let settings = AppSettings()
         _appSettings = StateObject(wrappedValue: settings)
         _notificationService = StateObject(wrappedValue: SystemNotificationService(
-            settings: settings,
-            gmailPoller: poller
+            settings: settings
         ))
 
         do {
@@ -188,23 +180,21 @@ struct ScopeApp: App {
                 .environmentObject(devEnvironment)
                 .environmentObject(projectAnalyzer)
                 .environmentObject(claudeService)
-                .environmentObject(gmailPoller)
                 .environmentObject(githubService)
                 .environmentObject(contextEngine)
-                .environmentObject(briefingService)
                 .environmentObject(updateService)
+                .preferredColorScheme(.dark)
                 .accentColor(Color(red: 0.976, green: 0.451, blue: 0.086)) // Scope orange (#f97316)
                 .onAppear {
                     NSApplication.shared.activate(ignoringOtherApps: true)
                     appState.loadProjects()
-                    if appSettings.gmailSyncEnabled {
-                        gmailPoller.startPolling(interval: appSettings.gmailSyncInterval)
-                    }
                     contextEngine.startPollingForRequests()
-                    notificationService.observeGmailPoller()
                     notificationService.observeClaudeExitNotifications()
-                    Task {
-                        await briefingService.checkAndGenerate(settings: appSettings)
+                    // Show onboarding wizard on first launch
+                    if !UserDefaults.standard.bool(forKey: "hasCompletedOnboarding") {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                            showOnboarding = true
+                        }
                     }
                     // Start auto-update checks if enabled
                     if appSettings.checkForUpdates {
@@ -231,6 +221,9 @@ struct ScopeApp: App {
                 }
                 .onOpenURL { url in
                     handleDeepLink(url)
+                }
+                .sheet(isPresented: $showOnboarding) {
+                    MCPSetupView()
                 }
                 .sheet(isPresented: $showDeepLinkSheet) {
                     VStack(spacing: 16) {

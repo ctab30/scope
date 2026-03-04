@@ -6,6 +6,16 @@ struct NoteListView: View {
     @EnvironmentObject var appState: AppState
     @State private var notes: [Note] = []
     @State private var selectedNote: Note?
+    @State private var searchText: String = ""
+
+    private var filteredNotes: [Note] {
+        let sorted = sortedNotes
+        if searchText.isEmpty { return sorted }
+        return sorted.filter {
+            $0.title.localizedCaseInsensitiveContains(searchText) ||
+            $0.content.localizedCaseInsensitiveContains(searchText)
+        }
+    }
 
     var body: some View {
         HSplitView {
@@ -14,38 +24,32 @@ struct NoteListView: View {
                 // Header
                 HStack {
                     Text("Notes")
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(ScopeTheme.Font.bodySemibold)
                     Spacer()
                     Button {
                         createNote()
                     } label: {
                         Image(systemName: "plus")
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundColor(.secondary)
-                            .frame(width: 22, height: 22)
-                            .background(Color(nsColor: .controlBackgroundColor))
-                            .cornerRadius(5)
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
                     .help("New note")
                 }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 10)
+                .padding(.horizontal, ScopeTheme.Spacing.md)
+                .padding(.vertical, ScopeTheme.Spacing.sm)
 
                 Divider()
 
                 // Note list
                 ScrollView {
-                    LazyVStack(spacing: 2) {
-                        ForEach(sortedNotes) { note in
+                    LazyVStack(spacing: 1) {
+                        ForEach(filteredNotes) { note in
                             NoteRow(note: note, isSelected: selectedNote?.id == note.id)
                                 .onTapGesture {
                                     selectedNote = note
                                 }
                         }
                     }
-                    .padding(.vertical, 4)
-                    .padding(.horizontal, 4)
                 }
             }
             .frame(minWidth: 200, idealWidth: 240)
@@ -66,15 +70,15 @@ struct NoteListView: View {
                 )
                 .frame(minWidth: 300)
             } else {
-                VStack(spacing: 10) {
+                VStack(spacing: ScopeTheme.Spacing.sm) {
                     Image(systemName: "note.text")
                         .font(.system(size: 28))
                         .foregroundStyle(.tertiary)
                     Text("Select or create a note")
-                        .font(.system(size: 13, weight: .medium))
+                        .font(ScopeTheme.Font.bodyMedium)
                         .foregroundColor(.secondary)
                     Text("Use notes to capture project context")
-                        .font(.system(size: 11))
+                        .font(ScopeTheme.Font.footnote)
                         .foregroundStyle(.tertiary)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -219,32 +223,32 @@ struct NoteRow: View {
     @State private var isHovering = false
 
     var body: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: ScopeTheme.Spacing.xs) {
             if note.pinned {
                 Image(systemName: "pin.fill")
-                    .font(.system(size: 9))
+                    .font(ScopeTheme.Font.tag)
                     .foregroundColor(.orange)
             }
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: ScopeTheme.Spacing.xxxs) {
                 Text(settings.demoMode ? DemoContent.shared.mask(note.title, as: .note) : note.title)
-                    .font(.system(size: 12, weight: .medium))
+                    .font(ScopeTheme.Font.footnoteMedium)
                     .lineLimit(1)
 
                 Text(note.updatedAt, style: .relative)
-                    .font(.system(size: 10))
+                    .font(ScopeTheme.Font.caption)
                     .foregroundStyle(.tertiary)
             }
 
             Spacer()
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 7)
+        .padding(.horizontal, ScopeTheme.Spacing.sm)
+        .padding(.vertical, ScopeTheme.Spacing.xs)
         .background(
-            RoundedRectangle(cornerRadius: 6)
+            RoundedRectangle(cornerRadius: ScopeTheme.Radius.small)
                 .fill(isSelected
-                      ? Color.accentColor.opacity(0.15)
-                      : isHovering ? Color(nsColor: .separatorColor).opacity(0.15) : Color.clear)
+                      ? Color.accentColor.opacity(ScopeTheme.Opacity.selection)
+                      : isHovering ? ScopeTheme.Colors.separator.opacity(ScopeTheme.Opacity.selection) : Color.clear)
         )
         .contentShape(Rectangle())
         .onHover { hovering in

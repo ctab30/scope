@@ -38,14 +38,14 @@ struct TerminalTabView: View {
 
                 Button(action: addTab) {
                     Image(systemName: "plus")
-                        .font(.system(size: 11, weight: .medium))
+                        .font(ScopeTheme.Font.footnoteMedium)
                         .foregroundColor(.secondary)
                         .frame(width: 26, height: 26)
                         .background(Color.clear)
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .padding(.leading, 2)
+                .padding(.leading, ScopeTheme.Spacing.xxxs)
 
                 Spacer()
 
@@ -55,16 +55,11 @@ struct TerminalTabView: View {
                         launchTask(title: title, command: command)
                     }
                 )
-                .padding(.trailing, 6)
+                .padding(.trailing, ScopeTheme.Spacing.xs)
             }
-            .padding(.horizontal, 6)
-            .padding(.vertical, 4)
-            .background(Color(nsColor: .windowBackgroundColor))
-
-            // Thin separator
-            Rectangle()
-                .fill(Color(nsColor: .separatorColor).opacity(0.5))
-                .frame(height: 1)
+            .padding(.horizontal, ScopeTheme.Spacing.xs)
+            .padding(.vertical, ScopeTheme.Spacing.xxs)
+            .background(.clear)
 
             // Agent status bar (visible when Claude Code is running)
             AgentStatusBar(monitor: agentMonitor)
@@ -93,12 +88,12 @@ struct TerminalTabView: View {
             }
             .overlay {
                 if tabs.isEmpty {
-                    VStack(spacing: 8) {
+                    VStack(spacing: ScopeTheme.Spacing.sm) {
                         Image(systemName: "terminal")
                             .font(.system(size: 24))
                             .foregroundStyle(.tertiary)
                         Text("No terminal open")
-                            .font(.system(size: 12))
+                            .font(ScopeTheme.Font.footnote)
                             .foregroundStyle(.tertiary)
                     }
                 }
@@ -178,13 +173,13 @@ struct TerminalTabView: View {
     private func tabButton(for tab: TerminalTab) -> some View {
         let isSelected = tab.id == selectedTabId
 
-        HStack(spacing: 4) {
+        HStack(spacing: ScopeTheme.Spacing.xxs) {
             Image(systemName: "terminal")
-                .font(.system(size: 9, weight: .medium))
+                .font(ScopeTheme.Font.tag)
                 .foregroundColor(isSelected ? .primary : .secondary.opacity(0.5))
 
             Text(tab.title)
-                .font(.system(size: 11, weight: isSelected ? .medium : .regular))
+                .font(isSelected ? ScopeTheme.Font.footnoteMedium : ScopeTheme.Font.footnote)
                 .lineLimit(1)
                 .foregroundColor(isSelected ? .primary : .secondary)
 
@@ -196,28 +191,15 @@ struct TerminalTabView: View {
                         .frame(width: 14, height: 14)
                         .background(
                             Circle()
-                                .fill(Color(nsColor: .controlBackgroundColor).opacity(0.6))
+                                .fill(ScopeTheme.Colors.controlBg.opacity(0.6))
                         )
                 }
                 .buttonStyle(.plain)
                 .opacity(isSelected ? 1 : 0)
             }
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 5)
-        .background(
-            RoundedRectangle(cornerRadius: 5)
-                .fill(isSelected
-                      ? Color(nsColor: .controlBackgroundColor)
-                      : Color.clear)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 5)
-                .stroke(isSelected
-                        ? Color(nsColor: .separatorColor).opacity(0.3)
-                        : Color.clear,
-                        lineWidth: 0.5)
-        )
+        .padding(.horizontal, ScopeTheme.Spacing.sm)
+        .padding(.vertical, ScopeTheme.Spacing.xxs)
         .contentShape(Rectangle())
         .onTapGesture {
             selectedTabId = tab.id

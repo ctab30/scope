@@ -17,48 +17,74 @@ struct ProjectSidebarView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // App title
-            HStack(spacing: 6) {
-                Image(systemName: "rectangle.grid.1x2.fill")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(.accentColor)
-                Text("Scope")
-                    .font(.system(size: 13, weight: .bold))
-                Spacer()
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 10)
-
-            Divider()
+            // Top spacer for title bar
+            Spacer()
+                .frame(height: 10)
 
             ScrollView {
-                VStack(spacing: 2) {
+                VStack(alignment: .leading, spacing: 2) {
                     // Home / Planner button
-                    SidebarItem(
-                        icon: "house.fill",
-                        label: "Planner",
-                        isSelected: appState.isHomeView,
-                        accentColor: .accentColor
-                    ) {
+                    Button {
                         appState.selectHome()
+                    } label: {
+                        Text("Projects")
+                            .font(ScopeTheme.Font.bodyMedium)
+                            .foregroundColor(.primary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, ScopeTheme.Spacing.sm)
+                            .padding(.vertical, ScopeTheme.Spacing.xs)
+                            .contentShape(Rectangle())
                     }
-                    .padding(.horizontal, 8)
-                    .padding(.top, 8)
+                    .buttonStyle(.plain)
 
                     Divider()
-                        .padding(.vertical, 6)
-                        .padding(.horizontal, 12)
+                        .padding(.horizontal, ScopeTheme.Spacing.sm)
 
                     // Client groups
                     ForEach(appState.projectsByClient, id: \.client?.id) { group in
                         if let client = group.client {
-                            clientSection(client: client, projects: group.projects)
+                            DisclosureGroup(isExpanded: Binding(
+                                get: { expandedClients.contains(client.id) },
+                                set: { if $0 { expandedClients.insert(client.id) } else { expandedClients.remove(client.id) } }
+                            )) {
+                                ForEach(group.projects) { project in
+                                    projectRow(project: project)
+                                }
+                            } label: {
+                                HStack(spacing: 6) {
+                                    Circle()
+                                        .fill(Color(hex: client.color) ?? .blue)
+                                        .frame(width: 8, height: 8)
+                                    Text(settings.demoMode ? DemoContent.shared.mask(client.name, as: .client) : client.name)
+                                        .font(ScopeTheme.Font.footnoteSemibold)
+                                        .foregroundColor(.secondary)
+                                        .textCase(.uppercase)
+                                }
+                            }
+                            .contextMenu {
+                                Button("Rename...") { /* TODO: inline rename */ }
+                                Button("Delete", role: .destructive) {
+                                    appState.deleteClient(client)
+                                }
+                            }
                         } else {
-                            ungroupedSection(projects: group.projects)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Ungrouped")
+                                    .font(ScopeTheme.Font.footnoteSemibold)
+                                    .foregroundColor(.secondary)
+                                    .padding(.horizontal, ScopeTheme.Spacing.sm)
+                                    .padding(.top, ScopeTheme.Spacing.md)
+                                    .padding(.bottom, ScopeTheme.Spacing.xxs)
+
+                                ForEach(group.projects) { project in
+                                    projectRow(project: project)
+                                }
+                            }
                         }
                     }
                 }
-                .padding(.bottom, 8)
+                .padding(.horizontal, ScopeTheme.Spacing.xs)
+                .padding(.vertical, ScopeTheme.Spacing.xxs)
             }
 
             Divider()
@@ -72,7 +98,7 @@ struct ProjectSidebarView: View {
                         Image(systemName: "folder.badge.plus")
                             .font(.system(size: 10, weight: .semibold))
                         Text("Open Folder")
-                            .font(.system(size: 11, weight: .medium))
+                            .font(ScopeTheme.Font.footnoteMedium)
                     }
                     .foregroundColor(.secondary)
                     .frame(maxWidth: .infinity)
@@ -90,8 +116,8 @@ struct ProjectSidebarView: View {
                     HStack(spacing: 4) {
                         Image(systemName: "plus")
                             .font(.system(size: 10, weight: .semibold))
-                        Text("Client")
-                            .font(.system(size: 11, weight: .medium))
+                        Text("Group")
+                            .font(ScopeTheme.Font.footnoteMedium)
                     }
                     .foregroundColor(.secondary)
                     .frame(maxWidth: .infinity)
@@ -102,7 +128,6 @@ struct ProjectSidebarView: View {
             }
         }
         .frame(width: 200)
-        .background(Color(nsColor: .windowBackgroundColor))
         .sheet(isPresented: $showingNewClient) {
             NewClientSheet(
                 isPresented: $showingNewClient,
@@ -141,107 +166,45 @@ struct ProjectSidebarView: View {
         }
     }
 
-    // MARK: - Client Section
-
-    @ViewBuilder
-    private func clientSection(client: Client, projects: [Project]) -> some View {
-        VStack(spacing: 0) {
-            Button {
-                withAnimation(.easeInOut(duration: 0.15)) {
-                    if expandedClients.contains(client.id) {
-                        expandedClients.remove(client.id)
-                    } else {
-                        expandedClients.insert(client.id)
-                    }
-                }
-            } label: {
-                HStack(spacing: 6) {
-                    Circle()
-                        .fill(Color(hex: client.color) ?? .blue)
-                        .frame(width: 8, height: 8)
-                    Text(settings.demoMode ? DemoContent.shared.mask(client.name, as: .client) : client.name)
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundColor(.secondary)
-                        .textCase(.uppercase)
-                    Spacer()
-                    Image(systemName: expandedClients.contains(client.id) ? "chevron.down" : "chevron.right")
-                        .font(.system(size: 8, weight: .semibold))
-                        .foregroundStyle(.tertiary)
-                }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 5)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .contextMenu {
-                Button("Rename...") { /* TODO: inline rename */ }
-                Button("Delete", role: .destructive) {
-                    appState.deleteClient(client)
-                }
-            }
-
-            if expandedClients.contains(client.id) {
-                ForEach(projects) { project in
-                    projectRow(project: project)
-                }
-            }
-        }
-    }
-
-    // MARK: - Ungrouped Section
-
-    @ViewBuilder
-    private func ungroupedSection(projects: [Project]) -> some View {
-        VStack(spacing: 0) {
-            HStack(spacing: 6) {
-                Circle()
-                    .fill(Color.secondary.opacity(0.3))
-                    .frame(width: 8, height: 8)
-                Text("Ungrouped")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundColor(.secondary)
-                    .textCase(.uppercase)
-                Spacer()
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 5)
-
-            ForEach(projects) { project in
-                projectRow(project: project)
-            }
-        }
-    }
-
     // MARK: - Project Row
 
     @ViewBuilder
     private func projectRow(project: Project) -> some View {
-        let isSelected = !appState.isHomeView && appState.currentProject?.id == project.id
-
-        SidebarItem(
-            icon: "folder.fill",
-            label: settings.demoMode ? DemoContent.shared.mask(project.name, as: .project) : project.name,
-            tag: {
-                guard let tag = project.tagsArray.first else { return nil }
-                return settings.demoMode ? DemoContent.shared.mask(tag, as: .project) : tag
-            }(),
-            isSelected: isSelected,
-            accentColor: .accentColor
-        ) {
+        Button {
             openWindow(value: project.id)
+        } label: {
+            HStack(spacing: 6) {
+                Label(
+                    settings.demoMode ? DemoContent.shared.mask(project.name, as: .project) : project.name,
+                    systemImage: "folder.fill"
+                )
+                .font(ScopeTheme.Font.bodyMedium)
+                .lineLimit(1)
+                .truncationMode(.tail)
+
+                if let tag = project.tagsArray.first {
+                    Text(settings.demoMode ? DemoContent.shared.mask(tag, as: .project) : tag)
+                        .font(ScopeTheme.Font.tag)
+                        .foregroundStyle(.tertiary)
+                        .lineLimit(1)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, ScopeTheme.Spacing.sm)
+            .padding(.vertical, ScopeTheme.Spacing.xs)
+            .contentShape(Rectangle())
         }
-        .padding(.leading, 20)
-        .padding(.trailing, 8)
+        .buttonStyle(.plain)
         .popover(isPresented: Binding(
             get: { editingTagProjectId == project.id },
             set: { if !$0 { editingTagProjectId = nil } }
         )) {
             VStack(spacing: 8) {
                 Text("Project Tag")
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(ScopeTheme.Font.bodySemibold)
                 TextField("e.g. main, api, web", text: $editingTagText)
                     .textFieldStyle(.roundedBorder)
-                    .font(.system(size: 12))
+                    .font(ScopeTheme.Font.body)
                     .frame(width: 160)
                     .onSubmit { saveTag(for: project) }
                 HStack(spacing: 8) {
@@ -250,14 +213,14 @@ struct ProjectSidebarView: View {
                             editingTagText = ""
                             saveTag(for: project)
                         }
-                        .font(.system(size: 11))
+                        .font(ScopeTheme.Font.footnote)
                     }
                     Spacer()
                     Button("Cancel") { editingTagProjectId = nil }
-                        .font(.system(size: 11))
+                        .font(ScopeTheme.Font.footnote)
                         .keyboardShortcut(.cancelAction)
                     Button("Save") { saveTag(for: project) }
-                        .font(.system(size: 11))
+                        .font(ScopeTheme.Font.footnote)
                         .keyboardShortcut(.defaultAction)
                 }
             }
@@ -268,7 +231,7 @@ struct ProjectSidebarView: View {
                 editingTagText = project.tagsArray.first ?? ""
                 editingTagProjectId = project.id
             }
-            Menu("Set Client") {
+            Menu("Set Group") {
                 Button("None") {
                     appState.updateProjectClient(project, clientId: nil)
                 }
@@ -296,59 +259,6 @@ struct ProjectSidebarView: View {
     }
 }
 
-// MARK: - SidebarItem
-
-struct SidebarItem: View {
-    let icon: String
-    let label: String
-    var tag: String? = nil
-    let isSelected: Bool
-    let accentColor: Color
-    let action: () -> Void
-
-    @State private var isHovering = false
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 6) {
-                Image(systemName: icon)
-                    .font(.system(size: 11, weight: isSelected ? .semibold : .regular))
-                    .foregroundColor(isSelected ? accentColor : .secondary)
-                    .frame(width: 16)
-                Text(label)
-                    .font(.system(size: 12, weight: isSelected ? .medium : .regular))
-                    .foregroundColor(isSelected ? .primary : .secondary)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-                if let tag, !tag.isEmpty {
-                    Text(tag)
-                        .font(.system(size: 9, weight: .medium))
-                        .foregroundColor(isSelected ? accentColor : .secondary)
-                        .padding(.horizontal, 5)
-                        .padding(.vertical, 1)
-                        .background(
-                            Capsule()
-                                .fill(isSelected ? accentColor.opacity(0.15) : Color.secondary.opacity(0.12))
-                        )
-                        .lineLimit(1)
-                }
-                Spacer()
-            }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 5)
-            .background(
-                RoundedRectangle(cornerRadius: 6)
-                    .fill(isSelected
-                          ? accentColor.opacity(0.12)
-                          : isHovering ? Color(nsColor: .separatorColor).opacity(0.15) : Color.clear)
-            )
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .onHover { hovering in isHovering = hovering }
-    }
-}
-
 // MARK: - NewClientSheet
 
 struct NewClientSheet: View {
@@ -359,12 +269,12 @@ struct NewClientSheet: View {
 
     var body: some View {
         VStack(spacing: 16) {
-            Text("New Client")
-                .font(.system(size: 15, weight: .semibold))
+            Text("New Group")
+                .font(ScopeTheme.Font.headline)
 
-            TextField("Client name", text: $name)
+            TextField("Group name", text: $name)
                 .textFieldStyle(.roundedBorder)
-                .font(.system(size: 13))
+                .font(ScopeTheme.Font.body)
                 .frame(width: 260)
 
             HStack(spacing: 6) {

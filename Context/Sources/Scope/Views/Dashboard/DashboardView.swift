@@ -99,13 +99,14 @@ struct DashboardView: View {
                 // Recent sessions
                 VStack(alignment: .leading, spacing: 10) {
                     Text("Recent Sessions")
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(ScopeTheme.Font.bodySemibold)
                         .foregroundColor(.primary)
 
                     if !sessions.isEmpty {
-                        LazyVStack(spacing: 6) {
+                        LazyVStack(spacing: 0) {
                             ForEach(sessions) { session in
                                 SessionCard(session: session)
+                                Divider()
                             }
                         }
                     } else {
@@ -130,11 +131,11 @@ struct DashboardView: View {
                 .foregroundStyle(.tertiary)
 
             Text("No sessions yet")
-                .font(.system(size: 13, weight: .medium))
+                .font(ScopeTheme.Font.bodyMedium)
                 .foregroundColor(.secondary)
 
             Text("Select a project to see its session history")
-                .font(.system(size: 11))
+                .font(ScopeTheme.Font.footnote)
                 .foregroundStyle(.tertiary)
         }
         .frame(maxWidth: .infinity)
@@ -195,36 +196,17 @@ struct ActionButton: View {
     let style: Style
     let action: () -> Void
 
-    @State private var isHovering = false
-
     var body: some View {
-        Button(action: action) {
-            HStack(spacing: 6) {
-                Image(systemName: icon)
-                    .font(.system(size: 12, weight: .medium))
-                Text(title)
-                    .font(.system(size: 12, weight: .medium))
+        if style == .primary {
+            Button(action: action) {
+                Label(title, systemImage: icon)
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 7)
-            .background(
-                RoundedRectangle(cornerRadius: 7)
-                    .fill(style == .primary
-                          ? Color.accentColor.opacity(isHovering ? 0.25 : 0.15)
-                          : Color(nsColor: .controlBackgroundColor).opacity(isHovering ? 1 : 0.8))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 7)
-                    .stroke(style == .primary
-                            ? Color.accentColor.opacity(0.3)
-                            : Color(nsColor: .separatorColor).opacity(0.5),
-                            lineWidth: 0.5)
-            )
-            .foregroundColor(style == .primary ? .accentColor : .primary)
-        }
-        .buttonStyle(.plain)
-        .onHover { hovering in
-            isHovering = hovering
+            .buttonStyle(.borderedProminent)
+        } else {
+            Button(action: action) {
+                Label(title, systemImage: icon)
+            }
+            .buttonStyle(.bordered)
         }
     }
 }
@@ -238,28 +220,19 @@ struct StatCard: View {
     let color: Color
 
     var body: some View {
-        VStack(spacing: 6) {
-            Image(systemName: icon)
-                .font(.system(size: 16, weight: .medium))
-                .foregroundStyle(color.opacity(0.8))
-
+        HStack(spacing: ScopeTheme.Spacing.sm) {
             Text(value)
-                .font(.system(size: 22, weight: .bold, design: .rounded))
+                .font(ScopeTheme.Font.largeNumber)
                 .foregroundColor(.primary)
 
-            Text(label)
-                .font(.system(size: 11, weight: .medium))
-                .foregroundColor(.secondary)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(label)
+                    .font(ScopeTheme.Font.caption)
+                    .foregroundColor(.secondary)
+            }
         }
-        .frame(width: 100, height: 85)
-        .background(
-            RoundedRectangle(cornerRadius: 10)
-                .fill(Color(nsColor: .controlBackgroundColor))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 10)
-                .stroke(Color(nsColor: .separatorColor).opacity(0.4), lineWidth: 0.5)
-        )
+        .padding(.horizontal, ScopeTheme.Spacing.md)
+        .padding(.vertical, ScopeTheme.Spacing.sm)
     }
 }
 
@@ -268,27 +241,26 @@ struct StatCard: View {
 struct SessionCard: View {
     let session: Session
     @EnvironmentObject var settings: AppSettings
-    @State private var isHovering = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: ScopeTheme.Spacing.sm) {
             // Header row
             HStack {
                 Text(settings.demoMode ? DemoContent.shared.mask(session.slug ?? String(session.id.prefix(8)), as: .session) : (session.slug ?? String(session.id.prefix(8))))
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(ScopeTheme.Font.bodySemibold)
                     .lineLimit(1)
 
                 Spacer()
 
                 if let date = session.startedAt {
                     Text(date.formatted(.dateTime.month(.abbreviated).day().hour().minute()))
-                        .font(.system(size: 11))
+                        .font(ScopeTheme.Font.footnote)
                         .foregroundStyle(.tertiary)
                 }
             }
 
             // Metadata pills
-            HStack(spacing: 6) {
+            HStack(spacing: ScopeTheme.Spacing.xs) {
                 if let branch = session.gitBranch {
                     MetadataPill(icon: "arrow.triangle.branch", text: settings.demoMode ? DemoContent.shared.mask(branch, as: .gitBranch) : branch, color: .purple)
                 }
@@ -317,24 +289,13 @@ struct SessionCard: View {
             // Summary
             if let summary = session.summary, !summary.isEmpty {
                 Text(settings.demoMode ? DemoContent.shared.mask(summary, as: .snippet) : summary)
-                    .font(.system(size: 12))
+                    .font(ScopeTheme.Font.body)
                     .foregroundColor(.primary.opacity(0.7))
                     .lineLimit(2)
             }
         }
-        .padding(12)
+        .padding(.vertical, ScopeTheme.Spacing.sm)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 8)
-                .fill(Color(nsColor: .controlBackgroundColor).opacity(isHovering ? 1 : 0.7))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 8)
-                .stroke(Color(nsColor: .separatorColor).opacity(0.3), lineWidth: 0.5)
-        )
-        .onHover { hovering in
-            isHovering = hovering
-        }
     }
 }
 
@@ -348,19 +309,11 @@ struct MetadataPill: View {
     var body: some View {
         HStack(spacing: 3) {
             Image(systemName: icon)
-                .font(.system(size: 9, weight: .medium))
+                .font(ScopeTheme.Font.tag)
             Text(text)
-                .font(.system(size: 10, weight: .medium))
+                .font(ScopeTheme.Font.caption)
                 .lineLimit(1)
         }
         .foregroundColor(color == .secondary ? .secondary : color.opacity(0.8))
-        .padding(.horizontal, 6)
-        .padding(.vertical, 2)
-        .background(
-            Capsule()
-                .fill(color == .secondary
-                      ? Color(nsColor: .separatorColor).opacity(0.15)
-                      : color.opacity(0.1))
-        )
     }
 }

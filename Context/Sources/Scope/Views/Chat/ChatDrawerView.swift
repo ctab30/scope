@@ -30,7 +30,7 @@ struct ChatDrawerView: View {
             // Messages
             ScrollViewReader { proxy in
                 ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 12) {
+                    LazyVStack(alignment: .leading, spacing: ScopeTheme.Spacing.md) {
                         if messages.isEmpty && !claudeService.isGenerating {
                             emptyState
                         }
@@ -46,11 +46,11 @@ struct ChatDrawerView: View {
                         }
                         if claudeService.isGenerating {
                             ThinkingIndicator()
-                                .padding(.horizontal, 12)
+                                .padding(.horizontal, ScopeTheme.Spacing.md)
                                 .id("loading")
                         }
                     }
-                    .padding(12)
+                    .padding(ScopeTheme.Spacing.md)
                 }
                 .onChange(of: messages.count) { _, _ in
                     if let lastId = messages.last?.id {
@@ -71,14 +71,7 @@ struct ChatDrawerView: View {
             // Input bar
             inputBar
         }
-        .frame(width: 380)
-        .background(Color(nsColor: .controlBackgroundColor))
-        .overlay(alignment: .leading) {
-            Rectangle()
-                .fill(Color(nsColor: .separatorColor).opacity(0.5))
-                .frame(width: 1)
-        }
-        .shadow(color: .black.opacity(0.3), radius: 12, x: -4, y: 0)
+        .background(ScopeTheme.Colors.windowBg)
         .onAppear { loadConversations() }
         .onChange(of: appState.currentProject?.id) { _, _ in
             loadConversations()
@@ -88,12 +81,12 @@ struct ChatDrawerView: View {
     // MARK: - Header
 
     private var header: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: ScopeTheme.Spacing.sm) {
             VStack(alignment: .leading, spacing: 1) {
                 Text("Chat")
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(ScopeTheme.Font.bodySemibold)
                 Text(contextLabel)
-                    .font(.system(size: 10))
+                    .font(ScopeTheme.Font.caption)
                     .foregroundColor(.secondary)
             }
 
@@ -111,7 +104,7 @@ struct ChatDrawerView: View {
                     }
                 } label: {
                     Image(systemName: "clock.arrow.circlepath")
-                        .font(.system(size: 11))
+                        .font(ScopeTheme.Font.footnote)
                         .frame(width: 24, height: 24)
                         .contentShape(Rectangle())
                 }
@@ -125,7 +118,7 @@ struct ChatDrawerView: View {
                 newConversation()
             } label: {
                 Image(systemName: "plus.bubble")
-                    .font(.system(size: 11))
+                    .font(ScopeTheme.Font.footnote)
                     .frame(width: 24, height: 24)
                     .contentShape(Rectangle())
             }
@@ -136,7 +129,7 @@ struct ChatDrawerView: View {
                 showSettings.toggle()
             } label: {
                 Image(systemName: "gearshape")
-                    .font(.system(size: 11))
+                    .font(ScopeTheme.Font.footnote)
                     .frame(width: 24, height: 24)
                     .contentShape(Rectangle())
             }
@@ -151,29 +144,29 @@ struct ChatDrawerView: View {
                 isOpen = false
             } label: {
                 Image(systemName: "xmark")
-                    .font(.system(size: 10, weight: .medium))
+                    .font(ScopeTheme.Font.caption)
                     .frame(width: 24, height: 24)
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .foregroundColor(.secondary)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
+        .padding(.horizontal, ScopeTheme.Spacing.md)
+        .padding(.vertical, ScopeTheme.Spacing.sm)
     }
 
     // MARK: - Empty State
 
     private var emptyState: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: ScopeTheme.Spacing.sm) {
             Image(systemName: "bubble.right")
                 .font(.system(size: 28))
                 .foregroundStyle(.tertiary)
             Text("Ask anything about \(contextLabel)")
-                .font(.system(size: 12))
+                .font(ScopeTheme.Font.body)
                 .foregroundStyle(.tertiary)
             Text("Tasks, sessions, architecture, code flows...")
-                .font(.system(size: 10))
+                .font(ScopeTheme.Font.caption)
                 .foregroundStyle(.quaternary)
         }
         .frame(maxWidth: .infinity)
@@ -183,10 +176,10 @@ struct ChatDrawerView: View {
     // MARK: - Input Bar
 
     private var inputBar: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: ScopeTheme.Spacing.sm) {
             TextField("Ask about \(contextLabel)...", text: $inputText, axis: .vertical)
                 .textFieldStyle(.plain)
-                .font(.system(size: 12))
+                .font(ScopeTheme.Font.body)
                 .lineLimit(1...5)
                 .focused($isInputFocused)
                 .onSubmit {
@@ -209,8 +202,9 @@ struct ChatDrawerView: View {
             .buttonStyle(.plain)
             .disabled(inputText.trimmingCharacters(in: .whitespaces).isEmpty || claudeService.isGenerating)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
+        .padding(.horizontal, ScopeTheme.Spacing.md)
+        .padding(.vertical, ScopeTheme.Spacing.sm)
+        .background(ScopeTheme.Colors.controlBg)
     }
 
     // MARK: - Data Operations
@@ -446,38 +440,38 @@ private struct ChatSettingsPopover: View {
     ]
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: ScopeTheme.Spacing.md) {
             Text("Chat Settings")
-                .font(.system(size: 13, weight: .semibold))
+                .font(ScopeTheme.Font.bodySemibold)
 
             GroupBox("Model") {
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: ScopeTheme.Spacing.xxs) {
                     Text(modelNames[ClaudeService.openRouterModel] ?? ClaudeService.openRouterModel)
-                        .font(.system(size: 12, weight: .medium))
+                        .font(ScopeTheme.Font.bodyMedium)
                     Text("Configure in Settings \u{2192} Scope Engine")
-                        .font(.system(size: 10))
+                        .font(ScopeTheme.Font.caption)
                         .foregroundStyle(.tertiary)
                 }
-                .padding(4)
+                .padding(ScopeTheme.Spacing.xxs)
             }
 
             GroupBox("API Key") {
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: ScopeTheme.Spacing.xxs) {
                     HStack {
                         Circle()
                             .fill(ClaudeService.openRouterAPIKey?.isEmpty == false ? Color.green : Color.red)
                             .frame(width: 8, height: 8)
                         Text(ClaudeService.openRouterAPIKey?.isEmpty == false ? "API key configured" : "No API key set")
-                            .font(.system(size: 11))
+                            .font(ScopeTheme.Font.footnote)
                     }
                     Text("Configure in Settings \u{2192} Scope Engine")
-                        .font(.system(size: 10))
+                        .font(ScopeTheme.Font.caption)
                         .foregroundStyle(.tertiary)
                 }
-                .padding(4)
+                .padding(ScopeTheme.Spacing.xxs)
             }
         }
-        .padding(12)
+        .padding(ScopeTheme.Spacing.md)
         .frame(width: 260)
     }
 }
@@ -506,7 +500,7 @@ private struct ThinkingIndicator: View {
                 .controlSize(.small)
                 .scaleEffect(0.7)
             Text(Self.phrases[currentIndex])
-                .font(.system(size: 11))
+                .font(ScopeTheme.Font.footnote)
                 .foregroundStyle(.tertiary)
                 .opacity(opacity)
         }

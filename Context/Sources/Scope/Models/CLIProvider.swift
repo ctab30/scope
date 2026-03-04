@@ -6,7 +6,6 @@ enum CLIProvider: String, CaseIterable, Codable, Identifiable, Hashable {
     case claude
     case gemini
     case codex
-    case opencode
 
     var id: String { rawValue }
 
@@ -17,7 +16,6 @@ enum CLIProvider: String, CaseIterable, Codable, Identifiable, Hashable {
         case .claude:   return "Claude Code"
         case .gemini:   return "Gemini CLI"
         case .codex:    return "Codex CLI"
-        case .opencode: return "OpenCode"
         }
     }
 
@@ -27,7 +25,6 @@ enum CLIProvider: String, CaseIterable, Codable, Identifiable, Hashable {
         case .claude:   return "Claude"
         case .gemini:   return "Gemini"
         case .codex:    return "Codex"
-        case .opencode: return "OpenCode"
         }
     }
 
@@ -36,7 +33,6 @@ enum CLIProvider: String, CaseIterable, Codable, Identifiable, Hashable {
         case .claude:   return "c.circle.fill"
         case .gemini:   return "g.circle.fill"
         case .codex:    return "x.circle.fill"
-        case .opencode: return "o.circle.fill"
         }
     }
 
@@ -45,7 +41,6 @@ enum CLIProvider: String, CaseIterable, Codable, Identifiable, Hashable {
         case .claude:   return .orange
         case .gemini:   return .blue
         case .codex:    return .green
-        case .opencode: return .purple
         }
     }
 
@@ -57,7 +52,6 @@ enum CLIProvider: String, CaseIterable, Codable, Identifiable, Hashable {
         case .claude:   return "claude"
         case .gemini:   return "gemini"
         case .codex:    return "codex"
-        case .opencode: return "opencode"
         }
     }
 
@@ -67,7 +61,6 @@ enum CLIProvider: String, CaseIterable, Codable, Identifiable, Hashable {
         case .claude:   return "CLAUDE.md"
         case .gemini:   return "GEMINI.md"
         case .codex:    return "AGENTS.md"
-        case .opencode: return "INSTRUCTIONS.md"
         }
     }
 
@@ -128,7 +121,6 @@ enum CLIProvider: String, CaseIterable, Codable, Identifiable, Hashable {
         case .claude:   return .projectRoot(".mcp.json")
         case .gemini:   return .userHome(".gemini/settings.json")
         case .codex:    return .userHome(".codex/config.toml")
-        case .opencode: return .projectRoot("opencode.json")
         }
     }
 

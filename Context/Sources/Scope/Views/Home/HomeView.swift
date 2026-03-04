@@ -6,13 +6,8 @@ struct HomeView: View {
         VSplitView {
             KanbanBoard(globalMode: true)
                 .frame(minHeight: 200)
-            HSplitView {
-                ProjectTaskSummary()
-                    .frame(minWidth: 200)
-                RecentEmailsView()
-                    .frame(minWidth: 200)
-            }
-            .frame(minHeight: 150)
+            ProjectTaskSummary()
+                .frame(minHeight: 150)
         }
     }
 }
@@ -42,31 +37,25 @@ struct ProjectTaskSummary: View {
         VStack(alignment: .leading, spacing: 0) {
             // Header
             HStack {
-                Image(systemName: "tray.full.fill")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundColor(.orange)
                 Text("Active Tasks by Project")
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(ScopeTheme.Font.footnoteSemibold)
                 Spacer()
                 Text("\(projectTasks.reduce(0) { $0 + $1.todoCount + $1.inProgressCount })")
-                    .font(.system(size: 11, weight: .bold, design: .rounded))
+                    .font(ScopeTheme.Font.caption)
                     .foregroundColor(.secondary)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(Color.secondary.opacity(0.12), in: Capsule())
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 10)
+            .padding(.horizontal, ScopeTheme.Spacing.md)
+            .padding(.vertical, ScopeTheme.Spacing.md)
 
             Divider()
 
             if projectTasks.isEmpty {
-                VStack(spacing: 6) {
+                VStack(spacing: ScopeTheme.Spacing.xs) {
                     Image(systemName: "checkmark.circle")
                         .font(.system(size: 20))
                         .foregroundColor(.green.opacity(0.6))
                     Text("All clear")
-                        .font(.system(size: 12, weight: .medium))
+                        .font(ScopeTheme.Font.footnoteMedium)
                         .foregroundColor(.secondary)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -77,12 +66,11 @@ struct ProjectTaskSummary: View {
                             projectTaskRow(pt)
                         }
                     }
-                    .padding(.vertical, 4)
+                    .padding(.vertical, ScopeTheme.Spacing.xxs)
                 }
             }
         }
-        .background(Color(nsColor: .underPageBackgroundColor).opacity(0.5))
-        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .background(Color.clear)
         .onAppear { loadProjectTasks() }
         .onReceive(NotificationCenter.default.publisher(for: .tasksDidChange)) { _ in
             loadProjectTasks()
@@ -97,41 +85,29 @@ struct ProjectTaskSummary: View {
         Button {
             openWindow(value: pt.id)
         } label: {
-            HStack(spacing: 8) {
+            HStack(spacing: ScopeTheme.Spacing.sm) {
                 Image(systemName: "folder.fill")
-                    .font(.system(size: 10))
+                    .font(ScopeTheme.Font.caption)
                     .foregroundColor(.secondary)
                     .frame(width: 14)
 
                 Text(settings.demoMode ? DemoContent.shared.mask(pt.name, as: .project) : pt.name)
-                    .font(.system(size: 12, weight: .medium))
+                    .font(ScopeTheme.Font.footnoteMedium)
                     .foregroundColor(.primary)
                     .lineLimit(1)
                     .truncationMode(.tail)
 
                 if let clientName = pt.clientName {
                     Text(settings.demoMode ? DemoContent.shared.mask(clientName, as: .client) : clientName)
-                        .font(.system(size: 9, weight: .medium))
-                        .foregroundColor(.white.opacity(0.9))
-                        .padding(.horizontal, 5)
-                        .padding(.vertical, 1)
-                        .background(
-                            Capsule()
-                                .fill(Color(hex: pt.clientColor ?? "") ?? Color.secondary)
-                        )
+                        .font(ScopeTheme.Font.tag)
+                        .foregroundColor(Color(hex: pt.clientColor ?? "") ?? Color.secondary)
                         .lineLimit(1)
                 }
 
                 if let tag = pt.tag, !tag.isEmpty {
                     Text(settings.demoMode ? DemoContent.shared.mask(tag, as: .project) : tag)
-                        .font(.system(size: 9, weight: .medium))
-                        .foregroundColor(.secondary)
-                        .padding(.horizontal, 5)
-                        .padding(.vertical, 1)
-                        .background(
-                            Capsule()
-                                .fill(Color.secondary.opacity(0.12))
-                        )
+                        .font(ScopeTheme.Font.tag)
+                        .foregroundStyle(.tertiary)
                         .lineLimit(1)
                 }
 
@@ -141,9 +117,9 @@ struct ProjectTaskSummary: View {
                     HStack(spacing: 3) {
                         Circle()
                             .fill(Color.blue)
-                            .frame(width: 6, height: 6)
+                            .frame(width: ScopeTheme.Spacing.xs, height: ScopeTheme.Spacing.xs)
                         Text("\(pt.inProgressCount)")
-                            .font(.system(size: 10, weight: .bold, design: .rounded))
+                            .font(ScopeTheme.Font.caption)
                             .foregroundColor(.blue)
                     }
                 }
@@ -151,14 +127,14 @@ struct ProjectTaskSummary: View {
                 HStack(spacing: 3) {
                     Circle()
                         .fill(Color.orange)
-                        .frame(width: 6, height: 6)
+                        .frame(width: ScopeTheme.Spacing.xs, height: ScopeTheme.Spacing.xs)
                     Text("\(pt.todoCount)")
-                        .font(.system(size: 10, weight: .bold, design: .rounded))
+                        .font(ScopeTheme.Font.caption)
                         .foregroundColor(.orange)
                 }
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
+            .padding(.horizontal, ScopeTheme.Spacing.md)
+            .padding(.vertical, ScopeTheme.Spacing.xs)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

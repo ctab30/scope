@@ -3,14 +3,13 @@ import SwiftUI
 /// Self-contained root view for project-specific windows.
 ///
 /// Per-project services (SessionWatcher, LiveSessionMonitor, etc.) are created per window.
-/// App-level services (AppSettings, BriefingService, ClaudeService) are shared via SharedServices
+/// App-level services (AppSettings, ClaudeService) are shared via SharedServices
 /// to avoid duplicating memory for every open project window.
 struct ProjectWindowView: View {
     let projectId: String
 
     // App-level services — shared across all windows
     private var appSettings: AppSettings { SharedServices.shared.appSettings }
-    private var briefingService: BriefingService { SharedServices.shared.briefingService }
     private var claudeService: ClaudeService { SharedServices.shared.claudeService }
 
     // Per-window services — legitimately per-project
@@ -28,12 +27,10 @@ struct ProjectWindowView: View {
     var body: some View {
         Group {
             if project != nil {
-                HSplitView {
+                SeamlessSplitView2 {
                     TerminalTabView(projectPath: $projectPath, projectId: projectId)
-                        .frame(minWidth: 400, idealWidth: 600)
-
+                } trailing: {
                     GUIPanelView()
-                        .frame(minWidth: 400, idealWidth: 600)
                 }
             } else {
                 VStack {
@@ -53,8 +50,8 @@ struct ProjectWindowView: View {
         .environmentObject(claudeService)
         .environmentObject(githubService)
         .environmentObject(contextEngine)
-        .environmentObject(briefingService)
-        .background(Color(nsColor: .windowBackgroundColor))
+        .preferredColorScheme(.dark)
+        .background(.ultraThinMaterial)
         .ignoresSafeArea()
         .background(WindowConfigurator(title: project?.name))
         .onAppear {

@@ -29,22 +29,22 @@ struct BrowserView: View {
         VStack(spacing: 0) {
             // Nav bar
             navBar
-                .padding(.horizontal, 10)
-                .padding(.vertical, 6)
-                .background(Color(nsColor: .windowBackgroundColor))
+                .padding(.horizontal, ScopeTheme.Spacing.sm)
+                .padding(.vertical, ScopeTheme.Spacing.xs)
+                .background(ScopeTheme.Colors.windowBg)
 
             Rectangle()
-                .fill(Color(nsColor: .separatorColor).opacity(0.5))
+                .fill(ScopeTheme.Colors.separator.opacity(0.5))
                 .frame(height: 1)
 
             // Tab strip
             tabStrip
-                .padding(.horizontal, 6)
-                .padding(.vertical, 4)
-                .background(Color(nsColor: .windowBackgroundColor))
+                .padding(.horizontal, ScopeTheme.Spacing.xs)
+                .padding(.vertical, ScopeTheme.Spacing.xxs)
+                .background(ScopeTheme.Colors.windowBg)
 
             Rectangle()
-                .fill(Color(nsColor: .separatorColor).opacity(0.5))
+                .fill(ScopeTheme.Colors.separator.opacity(0.5))
                 .frame(height: 1)
 
             // Web content — only the active tab's WKWebView is rendered.
@@ -53,12 +53,12 @@ struct BrowserView: View {
                 if let activeTab = viewModel.activeTab {
                     WebViewWrapper(webView: activeTab.webView)
                 } else {
-                    VStack(spacing: 8) {
+                    VStack(spacing: ScopeTheme.Spacing.sm) {
                         Image(systemName: "globe")
                             .font(.system(size: 24))
                             .foregroundStyle(.tertiary)
                         Text("No tabs open")
-                            .font(.system(size: 12))
+                            .font(ScopeTheme.Font.body)
                             .foregroundStyle(.tertiary)
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -146,13 +146,13 @@ struct BrowserView: View {
     // MARK: - Nav Bar
 
     private var navBar: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: ScopeTheme.Spacing.xs) {
             // Back
             Button {
                 viewModel.activeTab?.webView.goBack()
             } label: {
                 Image(systemName: "chevron.left")
-                    .font(.system(size: 12, weight: .medium))
+                    .font(ScopeTheme.Font.footnoteMedium)
                     .frame(width: 26, height: 26)
                     .contentShape(Rectangle())
             }
@@ -165,7 +165,7 @@ struct BrowserView: View {
                 viewModel.activeTab?.webView.goForward()
             } label: {
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 12, weight: .medium))
+                    .font(ScopeTheme.Font.footnoteMedium)
                     .frame(width: 26, height: 26)
                     .contentShape(Rectangle())
             }
@@ -184,7 +184,7 @@ struct BrowserView: View {
                 }
             } label: {
                 Image(systemName: viewModel.activeTab?.isLoading == true ? "xmark" : "arrow.clockwise")
-                    .font(.system(size: 11, weight: .medium))
+                    .font(ScopeTheme.Font.footnoteMedium)
                     .frame(width: 26, height: 26)
                     .contentShape(Rectangle())
             }
@@ -195,16 +195,16 @@ struct BrowserView: View {
             // URL field
             TextField("Enter URL", text: $urlText)
                 .textFieldStyle(.plain)
-                .font(.system(size: 12, design: .monospaced))
-                .padding(.horizontal, 8)
-                .padding(.vertical, 5)
+                .font(ScopeTheme.Font.mono)
+                .padding(.horizontal, ScopeTheme.Spacing.md)
+                .padding(.vertical, ScopeTheme.Spacing.xxs)
                 .background(
-                    RoundedRectangle(cornerRadius: 6)
-                        .fill(Color(nsColor: .textBackgroundColor))
+                    Capsule(style: .continuous)
+                        .fill(ScopeTheme.Colors.textBg)
                 )
                 .overlay(
-                    RoundedRectangle(cornerRadius: 6)
-                        .stroke(Color(nsColor: .separatorColor).opacity(0.5), lineWidth: 0.5)
+                    Capsule(style: .continuous)
+                        .stroke(ScopeTheme.Colors.separator.opacity(ScopeTheme.Opacity.border), lineWidth: 0.5)
                 )
                 .focused($isUrlBarFocused)
                 .onSubmit {
@@ -223,7 +223,7 @@ struct BrowserView: View {
                 }
             } label: {
                 Image(systemName: "camera")
-                    .font(.system(size: 11, weight: .medium))
+                    .font(ScopeTheme.Font.footnoteMedium)
                     .frame(width: 26, height: 26)
                     .contentShape(Rectangle())
             }
@@ -238,7 +238,7 @@ struct BrowserView: View {
                 }
             } label: {
                 Image(systemName: "ladybug")
-                    .font(.system(size: 11, weight: .medium))
+                    .font(ScopeTheme.Font.footnoteMedium)
                     .frame(width: 26, height: 26)
                     .contentShape(Rectangle())
             }
@@ -253,14 +253,14 @@ struct BrowserView: View {
             } label: {
                 ZStack(alignment: .topTrailing) {
                     Image(systemName: "terminal")
-                        .font(.system(size: 11, weight: .medium))
+                        .font(ScopeTheme.Font.footnoteMedium)
                         .frame(width: 26, height: 26)
                         .contentShape(Rectangle())
 
                     if let tab = viewModel.activeTab, !tab.consoleLogs.isEmpty {
                         let count = tab.consoleLogs.count
                         Text(count > 99 ? "99+" : "\(count)")
-                            .font(.system(size: 7, weight: .bold))
+                            .font(.system(size: 7, weight: .bold, design: .rounded))
                             .foregroundColor(.white)
                             .padding(.horizontal, 3)
                             .padding(.vertical, 1)
@@ -286,11 +286,11 @@ struct BrowserView: View {
                 showDevTools.toggle()
             } label: {
                 Image(systemName: "hammer")
-                    .font(.system(size: 11, weight: .medium))
+                    .font(ScopeTheme.Font.footnoteMedium)
                     .frame(width: 26, height: 26)
                     .background(
-                        RoundedRectangle(cornerRadius: 4)
-                            .fill(showDevTools ? Color.accentColor.opacity(0.2) : Color.clear)
+                        RoundedRectangle(cornerRadius: ScopeTheme.Radius.small)
+                            .fill(showDevTools ? Color.accentColor.opacity(ScopeTheme.Opacity.selection) : Color.clear)
                     )
                     .contentShape(Rectangle())
             }
@@ -315,14 +315,14 @@ struct BrowserView: View {
 
             Button(action: { viewModel.newTab() }) {
                 Image(systemName: "plus")
-                    .font(.system(size: 11, weight: .medium))
+                    .font(ScopeTheme.Font.footnoteMedium)
                     .foregroundColor(.secondary)
                     .frame(width: 26, height: 26)
                     .background(Color.clear)
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .padding(.leading, 2)
+            .padding(.leading, ScopeTheme.Spacing.xxxs)
 
             Spacer()
         }
@@ -334,7 +334,7 @@ struct BrowserView: View {
     private func browserTabButton(for tab: BrowserTab) -> some View {
         let isSelected = tab.id == viewModel.activeTabId
 
-        HStack(spacing: 4) {
+        HStack(spacing: ScopeTheme.Spacing.xxs) {
             if tab.isLoading {
                 ProgressView()
                     .controlSize(.mini)
@@ -342,12 +342,12 @@ struct BrowserView: View {
                     .frame(width: 10, height: 10)
             } else {
                 Image(systemName: "globe")
-                    .font(.system(size: 9, weight: .medium))
+                    .font(ScopeTheme.Font.tag)
                     .foregroundColor(isSelected ? .primary : .secondary.opacity(0.5))
             }
 
             Text(tab.title)
-                .font(.system(size: 11, weight: isSelected ? .medium : .regular))
+                .font(isSelected ? ScopeTheme.Font.footnoteMedium : ScopeTheme.Font.footnote)
                 .lineLimit(1)
                 .frame(maxWidth: 120, alignment: .leading)
                 .foregroundColor(isSelected ? .primary : .secondary)
@@ -360,24 +360,24 @@ struct BrowserView: View {
                         .frame(width: 14, height: 14)
                         .background(
                             Circle()
-                                .fill(Color(nsColor: .controlBackgroundColor).opacity(0.6))
+                                .fill(ScopeTheme.Colors.controlBg.opacity(0.6))
                         )
                 }
                 .buttonStyle(.plain)
             }
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 5)
+        .padding(.horizontal, ScopeTheme.Spacing.sm)
+        .padding(.vertical, ScopeTheme.Spacing.xxs)
         .background(
-            RoundedRectangle(cornerRadius: 5)
+            RoundedRectangle(cornerRadius: ScopeTheme.Radius.small)
                 .fill(isSelected
-                      ? Color(nsColor: .controlBackgroundColor)
+                      ? ScopeTheme.Colors.controlBg
                       : Color.clear)
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 5)
+            RoundedRectangle(cornerRadius: ScopeTheme.Radius.small)
                 .stroke(isSelected
-                        ? Color(nsColor: .separatorColor).opacity(0.3)
+                        ? ScopeTheme.Colors.separator.opacity(ScopeTheme.Opacity.subtleBorder)
                         : Color.clear,
                         lineWidth: 0.5)
         )

@@ -30,15 +30,9 @@ struct CostSummaryView: View {
 
                 Spacer()
 
-                // Total cost badge
                 Text(String(format: "$%.2f", costData.totalCost))
                     .font(.system(size: 12, weight: .bold, design: .rounded))
                     .foregroundColor(costColor(costData.totalCost))
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 3)
-                    .background(
-                        Capsule().fill(costColor(costData.totalCost).opacity(0.1))
-                    )
 
                 Button {
                     withAnimation(.easeInOut(duration: 0.2)) {
@@ -109,15 +103,7 @@ struct CostSummaryView: View {
                 }
             }
         }
-        .padding(14)
-        .background(
-            RoundedRectangle(cornerRadius: 10)
-                .fill(Color(nsColor: .controlBackgroundColor).opacity(0.5))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 10)
-                .stroke(Color(nsColor: .separatorColor).opacity(0.3), lineWidth: 0.5)
-        )
+        .padding(ScopeTheme.Spacing.lg)
         .onAppear { loadCostData() }
         .onChange(of: appState.currentProject) { _, _ in loadCostData() }
         .onReceive(NotificationCenter.default.publisher(for: .sessionsDidChange)) { _ in
@@ -230,10 +216,6 @@ struct CostStatCard: View {
 
     var body: some View {
         VStack(spacing: 4) {
-            Image(systemName: icon)
-                .font(.system(size: 11, weight: .medium))
-                .foregroundColor(color.opacity(0.7))
-
             Text(value)
                 .font(.system(size: 14, weight: .bold, design: .rounded))
                 .foregroundColor(.primary)
@@ -244,14 +226,6 @@ struct CostStatCard: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 8)
-        .background(
-            RoundedRectangle(cornerRadius: 7)
-                .fill(Color(nsColor: .controlBackgroundColor).opacity(0.6))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 7)
-                .stroke(Color(nsColor: .separatorColor).opacity(0.3), lineWidth: 0.5)
-        )
     }
 }
 

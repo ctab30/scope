@@ -10,9 +10,9 @@ struct TaskCardView: View {
     @State private var isHovering = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: ScopeTheme.Spacing.xs) {
             // Title + priority
-            HStack(alignment: .top, spacing: 6) {
+            HStack(alignment: .top, spacing: ScopeTheme.Spacing.xs) {
                 if task.priority > 0 {
                     Image(systemName: task.priorityLevel.icon)
                         .font(.system(size: 9, weight: .bold))
@@ -21,13 +21,13 @@ struct TaskCardView: View {
                         .padding(.top, 2)
                 }
                 Text(settings.demoMode ? DemoContent.shared.mask(task.title, as: .task) : task.title)
-                    .font(.system(size: 12, weight: .medium))
+                    .font(ScopeTheme.Font.footnoteMedium)
                     .lineLimit(2)
             }
 
             if let description = task.description, !description.isEmpty {
                 Text(settings.demoMode ? DemoContent.shared.mask(description, as: .snippet) : description)
-                    .font(.system(size: 11))
+                    .font(ScopeTheme.Font.footnote)
                     .foregroundColor(.secondary)
                     .lineLimit(2)
             }
@@ -35,60 +35,37 @@ struct TaskCardView: View {
             // Labels
             let labels = task.labelsArray
             if !labels.isEmpty {
-                HStack(spacing: 3) {
+                HStack(spacing: ScopeTheme.Spacing.xs) {
                     ForEach(labels.prefix(3), id: \.self) { label in
                         Text(label)
-                            .font(.system(size: 8, weight: .semibold))
+                            .font(ScopeTheme.Font.tag)
                             .textCase(.uppercase)
-                            .tracking(0.2)
-                            .padding(.horizontal, 5)
-                            .padding(.vertical, 1.5)
-                            .background(
-                                Capsule()
-                                    .fill(TaskItem.labelColor(for: label).opacity(0.12))
-                            )
+                            .tracking(0.3)
                             .foregroundColor(TaskItem.labelColor(for: label))
                     }
                     if labels.count > 3 {
                         Text("+\(labels.count - 3)")
-                            .font(.system(size: 8, weight: .medium))
+                            .font(ScopeTheme.Font.tag)
                             .foregroundColor(.secondary)
                     }
                 }
             }
 
-            HStack {
-                // Source badge
+            HStack(spacing: ScopeTheme.Spacing.xs) {
                 Text(task.source)
-                    .font(.system(size: 9, weight: .semibold))
+                    .font(ScopeTheme.Font.tag)
                     .textCase(.uppercase)
                     .tracking(0.3)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(
-                        Capsule()
-                            .fill(sourceColor.opacity(0.12))
-                    )
                     .foregroundColor(sourceColor)
 
                 if let projectName = projectName {
                     Button {
                         onProjectTap?()
                     } label: {
-                        HStack(spacing: 3) {
-                            Image(systemName: "folder.fill")
-                                .font(.system(size: 8))
-                            Text(settings.demoMode ? DemoContent.shared.mask(projectName, as: .project) : projectName)
-                                .font(.system(size: 9, weight: .medium))
-                                .lineLimit(1)
-                        }
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(
-                            Capsule()
-                                .fill(Color.accentColor.opacity(0.12))
-                        )
-                        .foregroundColor(.accentColor)
+                        Text(settings.demoMode ? DemoContent.shared.mask(projectName, as: .project) : projectName)
+                            .font(ScopeTheme.Font.tag)
+                            .lineLimit(1)
+                            .foregroundColor(.accentColor)
                     }
                     .buttonStyle(.plain)
                 }
@@ -96,20 +73,12 @@ struct TaskCardView: View {
                 Spacer()
 
                 Text(task.createdAt.formatted(.dateTime.month(.abbreviated).day()))
-                    .font(.system(size: 9))
+                    .font(ScopeTheme.Font.tag)
                     .foregroundStyle(.tertiary)
             }
         }
-        .padding(10)
-        .background(
-            RoundedRectangle(cornerRadius: 8)
-                .fill(Color(nsColor: .controlBackgroundColor))
-                .shadow(color: .black.opacity(isHovering ? 0.15 : 0.08), radius: isHovering ? 4 : 2, y: isHovering ? 2 : 1)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 8)
-                .strokeBorder(isHovering ? Color.accentColor.opacity(0.3) : Color.clear, lineWidth: 1)
-        )
+        .padding(.horizontal, ScopeTheme.Spacing.sm)
+        .padding(.vertical, ScopeTheme.Spacing.sm)
         .contentShape(Rectangle())
         .onTapGesture {
             onTap?()

@@ -17,15 +17,15 @@ struct LiveSessionView: View {
                 sessionHeader
                 Divider()
                 statsRow
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 12)
+                    .padding(.horizontal, ScopeTheme.Spacing.lg)
+                    .padding(.vertical, ScopeTheme.Spacing.md)
                 Divider()
                 detailsSection
-                    .padding(.horizontal, 16)
-                    .padding(.top, 12)
+                    .padding(.horizontal, ScopeTheme.Spacing.lg)
+                    .padding(.top, ScopeTheme.Spacing.md)
                 activityFeed
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 12)
+                    .padding(.horizontal, ScopeTheme.Spacing.lg)
+                    .padding(.vertical, ScopeTheme.Spacing.md)
             }
         }
     }
@@ -51,38 +51,38 @@ struct LiveSessionView: View {
                 }
             }
 
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 6) {
+            VStack(alignment: .leading, spacing: ScopeTheme.Spacing.xxxs) {
+                HStack(spacing: ScopeTheme.Spacing.xs) {
                     Text("LIVE")
                         .font(.system(size: 10, weight: .black))
                         .tracking(1)
                         .foregroundColor(.green)
 
                     Text(state.slug ?? String(state.sessionId?.prefix(8) ?? ""))
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(ScopeTheme.Font.bodySemibold)
                         .lineLimit(1)
                 }
 
-                HStack(spacing: 8) {
+                HStack(spacing: ScopeTheme.Spacing.sm) {
                     if let branch = state.gitBranch {
                         Label(branch, systemImage: "arrow.triangle.branch")
-                            .font(.system(size: 10))
+                            .font(ScopeTheme.Font.caption)
                             .foregroundColor(.purple.opacity(0.8))
                     }
                     if let model = state.model {
                         Text(shortModelName(model))
-                            .font(.system(size: 10, weight: .medium))
+                            .font(ScopeTheme.Font.caption)
                             .foregroundColor(.blue.opacity(0.8))
                     }
                     Text(state.elapsedFormatted)
-                        .font(.system(size: 10))
+                        .font(ScopeTheme.Font.caption)
                         .foregroundStyle(.tertiary)
                 }
             }
 
             Spacer()
         }
-        .padding(.horizontal, 16)
+        .padding(.horizontal, ScopeTheme.Spacing.lg)
         .padding(.vertical, 10)
         .background(Color.green.opacity(0.04))
     }
@@ -92,7 +92,7 @@ struct LiveSessionView: View {
     private var statsRow: some View {
         HStack(spacing: 10) {
             // Context meter
-            VStack(spacing: 6) {
+            VStack(spacing: ScopeTheme.Spacing.xs) {
                 contextMeter
                     .frame(height: 6)
 
@@ -100,24 +100,16 @@ struct LiveSessionView: View {
                     Text(state.contextFormatted)
                         .font(.system(size: 16, weight: .bold, design: .rounded))
                     Text(" / 200k")
-                        .font(.system(size: 11, weight: .medium, design: .rounded))
+                        .font(ScopeTheme.Font.footnoteMedium)
                         .foregroundColor(.secondary)
                 }
 
                 Text("Scope")
-                    .font(.system(size: 10, weight: .medium))
+                    .font(ScopeTheme.Font.caption)
                     .foregroundColor(.secondary)
             }
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 8)
-            .background(
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(Color(nsColor: .controlBackgroundColor).opacity(0.6))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 8)
-                    .stroke(Color(nsColor: .separatorColor).opacity(0.3), lineWidth: 0.5)
-            )
+            .padding(.vertical, ScopeTheme.Spacing.sm)
 
             // Cost
             LiveStatCard(
@@ -157,7 +149,7 @@ struct LiveSessionView: View {
                     .animation(.easeInOut(duration: 0.5), value: state.contextUsagePercent)
             }
         }
-        .padding(.horizontal, 12)
+        .padding(.horizontal, ScopeTheme.Spacing.md)
     }
 
     private var contextColor: Color {
@@ -176,18 +168,18 @@ struct LiveSessionView: View {
                     detailsExpanded.toggle()
                 }
             } label: {
-                HStack(spacing: 6) {
+                HStack(spacing: ScopeTheme.Spacing.xs) {
                     Image(systemName: detailsExpanded ? "chevron.down" : "chevron.right")
                         .font(.system(size: 9, weight: .bold))
                         .foregroundColor(.secondary)
                         .frame(width: 10)
                     Text("Tool Usage & Files")
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(ScopeTheme.Font.footnoteSemibold)
                         .foregroundColor(.secondary)
                     Spacer()
                     if !detailsExpanded {
                         Text("\(state.toolCounts.count) tools · \(state.filesChanged.count) files")
-                            .font(.system(size: 10))
+                            .font(ScopeTheme.Font.caption)
                             .foregroundStyle(.tertiary)
                     }
                 }
@@ -197,18 +189,18 @@ struct LiveSessionView: View {
             .buttonStyle(.plain)
 
             if detailsExpanded {
-                HStack(alignment: .top, spacing: 12) {
+                HStack(alignment: .top, spacing: ScopeTheme.Spacing.md) {
                     // Tool usage
-                    VStack(alignment: .leading, spacing: 6) {
+                    VStack(alignment: .leading, spacing: ScopeTheme.Spacing.xs) {
                         Label("Tool Usage", systemImage: "wrench.and.screwdriver")
-                            .font(.system(size: 11, weight: .semibold))
+                            .font(ScopeTheme.Font.footnoteSemibold)
                             .foregroundColor(.secondary)
 
                         if state.toolCounts.isEmpty {
                             Text("No tools used yet")
-                                .font(.system(size: 11))
+                                .font(ScopeTheme.Font.footnote)
                                 .foregroundStyle(.tertiary)
-                                .padding(.vertical, 4)
+                                .padding(.vertical, ScopeTheme.Spacing.xxs)
                         } else {
                             let maxCount = state.toolCounts.first?.count ?? 1
                             ForEach(state.toolCounts.prefix(8)) { tool in
@@ -219,24 +211,24 @@ struct LiveSessionView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
 
                     // Files changed
-                    VStack(alignment: .leading, spacing: 6) {
+                    VStack(alignment: .leading, spacing: ScopeTheme.Spacing.xs) {
                         Label("Files (\(state.filesChanged.count))", systemImage: "doc.text")
-                            .font(.system(size: 11, weight: .semibold))
+                            .font(ScopeTheme.Font.footnoteSemibold)
                             .foregroundColor(.secondary)
 
                         if state.filesChanged.isEmpty {
                             Text("No files touched yet")
-                                .font(.system(size: 11))
+                                .font(ScopeTheme.Font.footnote)
                                 .foregroundStyle(.tertiary)
-                                .padding(.vertical, 4)
+                                .padding(.vertical, ScopeTheme.Spacing.xxs)
                         } else {
                             ForEach(state.filesChanged.suffix(10).reversed(), id: \.self) { path in
-                                HStack(spacing: 4) {
+                                HStack(spacing: ScopeTheme.Spacing.xxs) {
                                     Image(systemName: "doc")
                                         .font(.system(size: 8))
                                         .foregroundStyle(.tertiary)
                                     Text((path as NSString).lastPathComponent)
-                                        .font(.system(size: 11, design: .monospaced))
+                                        .font(ScopeTheme.Font.mono)
                                         .lineLimit(1)
                                         .truncationMode(.middle)
                                         .foregroundColor(.primary.opacity(0.8))
@@ -244,7 +236,7 @@ struct LiveSessionView: View {
                             }
                             if state.filesChanged.count > 10 {
                                 Text("+\(state.filesChanged.count - 10) more")
-                                    .font(.system(size: 10))
+                                    .font(ScopeTheme.Font.caption)
                                     .foregroundStyle(.tertiary)
                             }
                         }
@@ -259,16 +251,16 @@ struct LiveSessionView: View {
     // MARK: - Activity Feed
 
     private var activityFeed: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: ScopeTheme.Spacing.xs) {
             Label("Activity", systemImage: "list.bullet")
-                .font(.system(size: 11, weight: .semibold))
+                .font(ScopeTheme.Font.footnoteSemibold)
                 .foregroundColor(.secondary)
 
             if state.recentActivity.isEmpty {
                 Text("Waiting for activity...")
-                    .font(.system(size: 11))
+                    .font(ScopeTheme.Font.footnote)
                     .foregroundStyle(.tertiary)
-                    .padding(.vertical, 4)
+                    .padding(.vertical, ScopeTheme.Spacing.xxs)
             } else {
                 LazyVStack(spacing: 2) {
                     ForEach(state.recentActivity.prefix(20)) { item in
@@ -298,28 +290,16 @@ struct LiveStatCard: View {
     let color: Color
 
     var body: some View {
-        VStack(spacing: 4) {
-            Image(systemName: icon)
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(color.opacity(0.7))
-
+        VStack(spacing: ScopeTheme.Spacing.xxs) {
             Text(value)
                 .font(.system(size: 16, weight: .bold, design: .rounded))
 
             Text(label)
-                .font(.system(size: 10, weight: .medium))
+                .font(ScopeTheme.Font.caption)
                 .foregroundColor(.secondary)
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 8)
-        .background(
-            RoundedRectangle(cornerRadius: 8)
-                .fill(Color(nsColor: .controlBackgroundColor).opacity(0.6))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 8)
-                .stroke(Color(nsColor: .separatorColor).opacity(0.3), lineWidth: 0.5)
-        )
+        .padding(.vertical, ScopeTheme.Spacing.sm)
     }
 }
 
@@ -331,9 +311,9 @@ struct ToolBar: View {
     let maxCount: Int
 
     var body: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: ScopeTheme.Spacing.xs) {
             Text(name)
-                .font(.system(size: 10, weight: .medium, design: .monospaced))
+                .font(ScopeTheme.Font.mono)
                 .frame(width: 50, alignment: .trailing)
                 .lineLimit(1)
                 .foregroundColor(.secondary)
@@ -347,7 +327,7 @@ struct ToolBar: View {
             .frame(height: 8)
 
             Text("\(count)")
-                .font(.system(size: 10, weight: .semibold, design: .rounded))
+                .font(ScopeTheme.Font.caption)
                 .foregroundColor(.primary.opacity(0.6))
                 .frame(width: 20, alignment: .trailing)
         }
@@ -361,10 +341,10 @@ struct ActivityRow: View {
     let item: ActivityItem
 
     var body: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: ScopeTheme.Spacing.xs) {
             // Timestamp
             Text(item.timestamp.formatted(.dateTime.hour().minute()))
-                .font(.system(size: 9, weight: .medium, design: .monospaced))
+                .font(ScopeTheme.Font.tag)
                 .foregroundStyle(.tertiary)
                 .frame(width: 38, alignment: .trailing)
 
@@ -375,15 +355,15 @@ struct ActivityRow: View {
 
             // Detail
             Text(item.detail)
-                .font(.system(size: 11))
+                .font(ScopeTheme.Font.footnote)
                 .foregroundColor(textColor)
                 .lineLimit(1)
                 .truncationMode(.tail)
 
             Spacer()
         }
-        .padding(.vertical, 2)
-        .padding(.horizontal, 4)
+        .padding(.vertical, ScopeTheme.Spacing.xxxs)
+        .padding(.horizontal, ScopeTheme.Spacing.xxs)
     }
 
     private var dotColor: Color {

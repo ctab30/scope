@@ -112,15 +112,6 @@ class MCPServer {
                 required: ["project_path"]
             ),
             toolDef(
-                name: "get_patterns",
-                description: "Get recorded codebase patterns for a project, optionally filtered by category.",
-                properties: [
-                    "project_path": propString("Absolute path to the project directory"),
-                    "category": propString("Filter by category: architecture, naming, schema, workflow")
-                ],
-                required: ["project_path"]
-            ),
-            toolDef(
                 name: "get_codebase_snapshot",
                 description: "Get the most recent codebase snapshot (file tree, schema hash, key symbols) for a project.",
                 properties: [
@@ -158,8 +149,6 @@ class MCPServer {
             resultData = try getRecentSessions(arguments: arguments)
         case "get_active_tasks":
             resultData = try getActiveTasks(arguments: arguments)
-        case "get_patterns":
-            resultData = try getPatterns(arguments: arguments)
         case "get_codebase_snapshot":
             resultData = try getCodebaseSnapshot(arguments: arguments)
         case "search_sessions":
@@ -232,37 +221,6 @@ class MCPServer {
                 dict["description"] = desc
             }
             return dict
-        }
-    }
-
-    private func getPatterns(arguments: [String: Any]) throws -> [[String: Any]] {
-        guard let projectPath = arguments["project_path"] as? String else {
-            throw MCPError.missingParameter("project_path")
-        }
-        let category = arguments["category"] as? String
-        let project = try findProject(byPath: projectPath)
-
-        guard let dbQueue = db.dbQueue else {
-            throw MCPError.databaseError("Database not initialized")
-        }
-
-        let patterns: [Pattern] = try dbQueue.read { db in
-            var request = Pattern
-                .filter(Column("projectId") == project.id)
-            if let category = category {
-                request = request.filter(Column("category") == category)
-            }
-            return try request
-                .order(Column("category"), Column("createdAt").desc)
-                .fetchAll(db)
-        }
-
-        return patterns.map { pattern in
-            [
-                "category": pattern.category,
-                "title": pattern.title,
-                "description": pattern.description
-            ]
         }
     }
 

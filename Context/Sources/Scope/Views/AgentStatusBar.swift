@@ -58,12 +58,6 @@ struct AgentStatusBar: View {
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 4)
-            .background(Color(nsColor: .windowBackgroundColor))
-            .overlay(alignment: .bottom) {
-                Rectangle()
-                    .fill(Color(nsColor: .separatorColor).opacity(0.3))
-                    .frame(height: 0.5)
-            }
         }
     }
 }

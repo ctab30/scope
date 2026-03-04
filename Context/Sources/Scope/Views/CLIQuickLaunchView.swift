@@ -71,33 +71,18 @@ struct CLIQuickLaunchView: View {
                 }
             }
         } label: {
-            HStack(spacing: 5) {
+            HStack(spacing: 4) {
                 Circle()
                     .fill(installed ? cli.color : .secondary.opacity(0.3))
-                    .frame(width: 7, height: 7)
+                    .frame(width: 6, height: 6)
 
                 Text(cli.shortName)
-                    .font(.system(size: 11, weight: isPreferred ? .semibold : .medium))
-                    .foregroundColor(installed ? .primary : .secondary.opacity(0.5))
+                    .font(ScopeTheme.Font.caption)
+                    .foregroundColor(installed ? (isPreferred ? cli.color : .primary) : .secondary.opacity(0.4))
 
                 Image(systemName: "chevron.down")
-                    .font(.system(size: 8, weight: .medium))
-                    .foregroundColor(.secondary)
-            }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .background {
-                Capsule()
-                    .fill(isPreferred
-                        ? cli.color.opacity(0.15)
-                        : Color.secondary.opacity(0.08))
-                    .overlay(
-                        Capsule()
-                            .strokeBorder(isPreferred
-                                ? cli.color.opacity(0.3)
-                                : Color.secondary.opacity(0.15),
-                            lineWidth: 1)
-                    )
+                    .font(.system(size: 7, weight: .medium))
+                    .foregroundColor(.secondary.opacity(0.5))
             }
         }
         .menuStyle(.borderlessButton)

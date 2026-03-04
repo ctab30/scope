@@ -25,17 +25,17 @@ struct GitChangesView: View {
     // MARK: - Empty State
 
     private var emptyState: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: ScopeTheme.Spacing.md) {
             Image(systemName: "arrow.triangle.branch")
                 .font(.system(size: 32))
                 .foregroundStyle(.tertiary)
 
             Text("Not a Git Repository")
-                .font(.system(size: 14, weight: .semibold))
+                .font(ScopeTheme.Font.headline)
                 .foregroundColor(.secondary)
 
             Text("This project is not tracked by Git. Initialize a repository to see changes here.")
-                .font(.system(size: 12))
+                .font(ScopeTheme.Font.footnote)
                 .foregroundStyle(.tertiary)
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: 280)
@@ -50,15 +50,15 @@ struct GitChangesView: View {
             VStack(alignment: .leading, spacing: 0) {
                 // Header
                 header
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 10)
+                    .padding(.horizontal, ScopeTheme.Spacing.xl)
+                    .padding(.vertical, ScopeTheme.Spacing.md)
 
                 Divider()
 
                 // Commit Composer
                 commitComposer
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 10)
+                    .padding(.horizontal, ScopeTheme.Spacing.xl)
+                    .padding(.vertical, ScopeTheme.Spacing.md)
 
                 Divider()
 
@@ -75,13 +75,13 @@ struct GitChangesView: View {
                     if gitService.stagedFiles.isEmpty {
                         sectionEmpty("No staged changes")
                     } else {
-                        LazyVStack(spacing: 4) {
+                        LazyVStack(spacing: ScopeTheme.Spacing.xxs) {
                             ForEach(gitService.stagedFiles) { file in
                                 fileRow(file, isStaged: true)
                             }
                         }
-                        .padding(.horizontal, 20)
-                        .padding(.bottom, 8)
+                        .padding(.horizontal, ScopeTheme.Spacing.xl)
+                        .padding(.bottom, ScopeTheme.Spacing.sm)
                     }
                 }
 
@@ -100,13 +100,13 @@ struct GitChangesView: View {
                     if gitService.unstagedFiles.isEmpty {
                         sectionEmpty("No unstaged changes")
                     } else {
-                        LazyVStack(spacing: 4) {
+                        LazyVStack(spacing: ScopeTheme.Spacing.xxs) {
                             ForEach(gitService.unstagedFiles) { file in
                                 fileRow(file, isStaged: false)
                             }
                         }
-                        .padding(.horizontal, 20)
-                        .padding(.bottom, 8)
+                        .padding(.horizontal, ScopeTheme.Spacing.xl)
+                        .padding(.bottom, ScopeTheme.Spacing.sm)
                     }
                 }
 
@@ -125,13 +125,13 @@ struct GitChangesView: View {
                     if gitService.untrackedFiles.isEmpty {
                         sectionEmpty("No untracked files")
                     } else {
-                        LazyVStack(spacing: 4) {
+                        LazyVStack(spacing: ScopeTheme.Spacing.xxs) {
                             ForEach(gitService.untrackedFiles) { file in
                                 fileRow(file, isStaged: false)
                             }
                         }
-                        .padding(.horizontal, 20)
-                        .padding(.bottom, 8)
+                        .padding(.horizontal, ScopeTheme.Spacing.xl)
+                        .padding(.bottom, ScopeTheme.Spacing.sm)
                     }
                 }
 
@@ -150,13 +150,13 @@ struct GitChangesView: View {
                     if gitService.recentCommits.isEmpty {
                         sectionEmpty("No commits yet")
                     } else {
-                        LazyVStack(spacing: 4) {
+                        LazyVStack(spacing: ScopeTheme.Spacing.xxs) {
                             ForEach(gitService.recentCommits) { entry in
                                 commitRow(entry)
                             }
                         }
-                        .padding(.horizontal, 20)
-                        .padding(.bottom, 8)
+                        .padding(.horizontal, ScopeTheme.Spacing.xl)
+                        .padding(.bottom, ScopeTheme.Spacing.sm)
                     }
                 }
 
@@ -165,13 +165,13 @@ struct GitChangesView: View {
                     Divider()
 
                     // GitHub header
-                    HStack(spacing: 6) {
+                    HStack(spacing: ScopeTheme.Spacing.xs) {
                         Image(systemName: "link")
-                            .font(.system(size: 10, weight: .medium))
+                            .font(ScopeTheme.Font.caption)
                             .foregroundStyle(.tertiary)
                         if let repo = githubService.repo {
                             Text("\(repo.owner)/\(repo.name)")
-                                .font(.system(size: 11, weight: .medium))
+                                .font(ScopeTheme.Font.footnoteMedium)
                                 .foregroundColor(.secondary)
                         }
                         Spacer()
@@ -181,8 +181,8 @@ struct GitChangesView: View {
                                 .scaleEffect(0.7)
                         }
                     }
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 8)
+                    .padding(.horizontal, ScopeTheme.Spacing.xl)
+                    .padding(.vertical, ScopeTheme.Spacing.sm)
 
                     Divider()
 
@@ -199,7 +199,7 @@ struct GitChangesView: View {
                         if githubService.pullRequests.isEmpty {
                             sectionEmpty("No open pull requests")
                         } else {
-                            LazyVStack(spacing: 4) {
+                            LazyVStack(spacing: ScopeTheme.Spacing.xxs) {
                                 ForEach(githubService.pullRequests) { pr in
                                     prRow(pr)
                                 }
@@ -224,7 +224,7 @@ struct GitChangesView: View {
                         if githubService.workflows.isEmpty {
                             sectionEmpty("No recent workflow runs")
                         } else {
-                            LazyVStack(spacing: 4) {
+                            LazyVStack(spacing: ScopeTheme.Spacing.xxs) {
                                 ForEach(githubService.workflows) { workflow in
                                     workflowRow(workflow)
                                 }
@@ -249,7 +249,7 @@ struct GitChangesView: View {
                         if githubService.issues.isEmpty {
                             sectionEmpty("No issues assigned to you")
                         } else {
-                            LazyVStack(spacing: 4) {
+                            LazyVStack(spacing: ScopeTheme.Spacing.xxs) {
                                 ForEach(githubService.issues) { issue in
                                     issueRow(issue)
                                 }
@@ -260,29 +260,29 @@ struct GitChangesView: View {
                     }
                 }
             }
-            .padding(.bottom, 20)
+            .padding(.bottom, ScopeTheme.Spacing.xl)
         }
     }
 
     // MARK: - Header
 
     private var header: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: ScopeTheme.Spacing.sm) {
             Image(systemName: "arrow.triangle.branch")
-                .font(.system(size: 12, weight: .medium))
+                .font(ScopeTheme.Font.footnoteMedium)
                 .foregroundColor(.secondary)
 
             Text(gitService.currentBranch)
-                .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                .font(ScopeTheme.Font.mono)
                 .foregroundColor(.primary)
                 .lineLimit(1)
 
             let totalChanges = gitService.stagedFiles.count + gitService.unstagedFiles.count + gitService.untrackedFiles.count
             if totalChanges > 0 {
                 Text("\(totalChanges)")
-                    .font(.system(size: 10, weight: .bold, design: .rounded))
+                    .font(ScopeTheme.Font.caption)
                     .foregroundColor(.white)
-                    .padding(.horizontal, 6)
+                    .padding(.horizontal, ScopeTheme.Spacing.xs)
                     .padding(.vertical, 1)
                     .background(Capsule().fill(Color.orange))
             }
@@ -299,7 +299,7 @@ struct GitChangesView: View {
                 Task { await gitService.refresh() }
             } label: {
                 Image(systemName: "arrow.clockwise")
-                    .font(.system(size: 11, weight: .medium))
+                    .font(ScopeTheme.Font.footnoteMedium)
                     .foregroundColor(.secondary)
             }
             .buttonStyle(.plain)
@@ -310,38 +310,38 @@ struct GitChangesView: View {
     // MARK: - Commit Composer
 
     private var commitComposer: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: ScopeTheme.Spacing.sm) {
             Text("Commit Message")
-                .font(.system(size: 11, weight: .semibold))
+                .font(ScopeTheme.Font.footnoteSemibold)
                 .foregroundColor(.secondary)
 
             TextEditor(text: $commitMessage)
-                .font(.system(size: 12, design: .monospaced))
+                .font(ScopeTheme.Font.mono)
                 .frame(height: 60)
                 .scrollContentBackground(.hidden)
-                .padding(6)
+                .padding(ScopeTheme.Spacing.xs)
                 .background(
-                    RoundedRectangle(cornerRadius: 6)
-                        .fill(Color(nsColor: .controlBackgroundColor))
+                    RoundedRectangle(cornerRadius: ScopeTheme.Radius.small)
+                        .fill(ScopeTheme.Colors.controlBg)
                 )
                 .overlay(
-                    RoundedRectangle(cornerRadius: 6)
-                        .stroke(Color(nsColor: .separatorColor).opacity(0.5), lineWidth: 0.5)
+                    RoundedRectangle(cornerRadius: ScopeTheme.Radius.small)
+                        .stroke(ScopeTheme.Colors.separator.opacity(0.5), lineWidth: 0.5)
                 )
 
-            HStack(spacing: 8) {
+            HStack(spacing: ScopeTheme.Spacing.sm) {
                 Button {
                     gitService.stageAll()
                 } label: {
                     Text("Stage All")
-                        .font(.system(size: 11, weight: .medium))
+                        .font(ScopeTheme.Font.footnoteMedium)
                 }
                 .buttonStyle(.plain)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 4)
+                .padding(.horizontal, ScopeTheme.Spacing.md)
+                .padding(.vertical, ScopeTheme.Spacing.xxs)
                 .background(
-                    RoundedRectangle(cornerRadius: 5)
-                        .fill(Color.green.opacity(0.12))
+                    RoundedRectangle(cornerRadius: ScopeTheme.Radius.small)
+                        .fill(Color.green.opacity(ScopeTheme.Opacity.selection))
                 )
                 .foregroundColor(.green)
 
@@ -349,14 +349,14 @@ struct GitChangesView: View {
                     gitService.unstageAll()
                 } label: {
                     Text("Unstage All")
-                        .font(.system(size: 11, weight: .medium))
+                        .font(ScopeTheme.Font.footnoteMedium)
                 }
                 .buttonStyle(.plain)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 4)
+                .padding(.horizontal, ScopeTheme.Spacing.md)
+                .padding(.vertical, ScopeTheme.Spacing.xxs)
                 .background(
-                    RoundedRectangle(cornerRadius: 5)
-                        .fill(Color.orange.opacity(0.12))
+                    RoundedRectangle(cornerRadius: ScopeTheme.Radius.small)
+                        .fill(Color.orange.opacity(ScopeTheme.Opacity.selection))
                 )
                 .foregroundColor(.orange)
 
@@ -365,20 +365,20 @@ struct GitChangesView: View {
                 Button {
                     performCommit()
                 } label: {
-                    HStack(spacing: 4) {
+                    HStack(spacing: ScopeTheme.Spacing.xxs) {
                         if isCommitting {
                             ProgressView()
                                 .controlSize(.mini)
                                 .scaleEffect(0.6)
                         }
                         Text("Commit")
-                            .font(.system(size: 11, weight: .semibold))
+                            .font(ScopeTheme.Font.footnoteSemibold)
                     }
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 5)
+                    .padding(.horizontal, ScopeTheme.Spacing.md)
+                    .padding(.vertical, ScopeTheme.Spacing.xxs)
                     .background(
-                        RoundedRectangle(cornerRadius: 5)
-                            .fill(canCommit ? Color.accentColor : Color.secondary.opacity(0.2))
+                        RoundedRectangle(cornerRadius: ScopeTheme.Radius.small)
+                            .fill(canCommit ? Color.accentColor : Color.secondary.opacity(ScopeTheme.Opacity.border))
                     )
                     .foregroundColor(canCommit ? .white : .secondary)
                 }
@@ -407,21 +407,21 @@ struct GitChangesView: View {
                 }
             }
         } label: {
-            HStack(spacing: 6) {
+            HStack(spacing: ScopeTheme.Spacing.xs) {
                 Image(systemName: icon)
-                    .font(.system(size: 11, weight: .medium))
+                    .font(ScopeTheme.Font.footnoteMedium)
                     .foregroundColor(accentColor)
-                    .frame(width: 16)
+                    .frame(width: ScopeTheme.Spacing.lg)
 
                 Text(title)
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(ScopeTheme.Font.footnoteSemibold)
                     .foregroundColor(.primary)
 
                 if count > 0 {
                     Text("\(count)")
-                        .font(.system(size: 10, weight: .bold, design: .rounded))
+                        .font(ScopeTheme.Font.caption)
                         .foregroundColor(.white)
-                        .padding(.horizontal, 6)
+                        .padding(.horizontal, ScopeTheme.Spacing.xs)
                         .padding(.vertical, 1)
                         .background(Capsule().fill(accentColor.opacity(0.7)))
                 }
@@ -429,11 +429,11 @@ struct GitChangesView: View {
                 Spacer()
 
                 Image(systemName: isCollapsed ? "chevron.right" : "chevron.down")
-                    .font(.system(size: 9, weight: .semibold))
+                    .font(ScopeTheme.Font.tag)
                     .foregroundStyle(.tertiary)
             }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 10)
+            .padding(.horizontal, ScopeTheme.Spacing.xl)
+            .padding(.vertical, ScopeTheme.Spacing.md)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -441,10 +441,10 @@ struct GitChangesView: View {
 
     private func sectionEmpty(_ message: String) -> some View {
         Text(message)
-            .font(.system(size: 11))
+            .font(ScopeTheme.Font.footnote)
             .foregroundStyle(.tertiary)
-            .padding(.horizontal, 20)
-            .padding(.vertical, 8)
+            .padding(.horizontal, ScopeTheme.Spacing.xl)
+            .padding(.vertical, ScopeTheme.Spacing.sm)
     }
 
     // MARK: - File Row
@@ -466,7 +466,7 @@ struct GitChangesView: View {
             VStack(alignment: .leading, spacing: 0) {
                 HStack {
                     Text(diffData.file.path)
-                        .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                        .font(ScopeTheme.Font.mono)
                         .foregroundColor(.secondary)
                     Spacer()
                     Button {
@@ -478,15 +478,15 @@ struct GitChangesView: View {
                     }
                     .buttonStyle(.plain)
                 }
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .background(Color(nsColor: .separatorColor).opacity(0.1))
+                .padding(.horizontal, ScopeTheme.Spacing.sm)
+                .padding(.vertical, ScopeTheme.Spacing.xxs)
+                .background(ScopeTheme.Colors.separator.opacity(ScopeTheme.Opacity.badge))
 
                 if diffData.lines.isEmpty {
                     Text("No changes to display")
-                        .font(.system(size: 11))
+                        .font(ScopeTheme.Font.footnote)
                         .foregroundStyle(.tertiary)
-                        .padding(8)
+                        .padding(ScopeTheme.Spacing.sm)
                 } else {
                     ScrollView([.horizontal, .vertical]) {
                         VStack(alignment: .leading, spacing: 0) {
@@ -499,13 +499,13 @@ struct GitChangesView: View {
                     .frame(maxHeight: 300)
                 }
             }
-            .background(Color(nsColor: .controlBackgroundColor))
-            .clipShape(RoundedRectangle(cornerRadius: 6))
+            .background(ScopeTheme.Colors.controlBg)
+            .clipShape(RoundedRectangle(cornerRadius: ScopeTheme.Radius.small))
             .overlay(
-                RoundedRectangle(cornerRadius: 6)
-                    .stroke(Color(nsColor: .separatorColor).opacity(0.3), lineWidth: 0.5)
+                RoundedRectangle(cornerRadius: ScopeTheme.Radius.small)
+                    .stroke(ScopeTheme.Colors.separator.opacity(ScopeTheme.Opacity.subtleBorder), lineWidth: 0.5)
             )
-            .padding(.top, 4)
+            .padding(.top, ScopeTheme.Spacing.xxs)
         }
         }
     }
@@ -514,55 +514,55 @@ struct GitChangesView: View {
         HStack(spacing: 0) {
             // Old line number
             Text(line.oldLineNumber.map { "\($0)" } ?? "")
-                .font(.system(size: 9, design: .monospaced))
+                .font(ScopeTheme.Font.tag)
                 .foregroundStyle(.tertiary)
                 .frame(width: 32, alignment: .trailing)
-                .padding(.trailing, 2)
+                .padding(.trailing, ScopeTheme.Spacing.xxxs)
 
             // New line number
             Text(line.newLineNumber.map { "\($0)" } ?? "")
-                .font(.system(size: 9, design: .monospaced))
+                .font(ScopeTheme.Font.tag)
                 .foregroundStyle(.tertiary)
                 .frame(width: 32, alignment: .trailing)
-                .padding(.trailing, 4)
+                .padding(.trailing, ScopeTheme.Spacing.xxs)
 
             // Prefix
             Text(line.prefix)
-                .font(.system(size: 11, design: .monospaced))
+                .font(ScopeTheme.Font.mono)
                 .foregroundColor(line.prefixColor)
                 .frame(width: 14, alignment: .center)
 
             // Content
             Text(line.text)
-                .font(.system(size: 11, design: .monospaced))
+                .font(ScopeTheme.Font.mono)
                 .foregroundColor(line.textColor)
                 .textSelection(.enabled)
         }
-        .padding(.horizontal, 4)
+        .padding(.horizontal, ScopeTheme.Spacing.xxs)
         .padding(.vertical, 0.5)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(line.backgroundColor)
     }
 
     private func fileRowContent(_ file: GitFileChange, isStaged: Bool) -> some View {
-        HStack(spacing: 8) {
+        HStack(spacing: ScopeTheme.Spacing.sm) {
             // Status icon
             Image(systemName: file.status.icon)
-                .font(.system(size: 13, weight: .medium))
+                .font(ScopeTheme.Font.bodyMedium)
                 .foregroundColor(file.status.color)
-                .frame(width: 20)
+                .frame(width: ScopeTheme.Spacing.xl)
 
             // File name and directory
             VStack(alignment: .leading, spacing: 1) {
                 Text(fileName(from: file.path))
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(ScopeTheme.Font.footnoteSemibold)
                     .foregroundColor(.primary)
                     .lineLimit(1)
 
                 let dir = directoryPath(from: file.path)
                 if !dir.isEmpty {
                     Text(dir)
-                        .font(.system(size: 10))
+                        .font(ScopeTheme.Font.caption)
                         .foregroundColor(.secondary)
                         .lineLimit(1)
                         .truncationMode(.middle)
@@ -573,13 +573,13 @@ struct GitChangesView: View {
 
             // Status badge
             Text(file.status.label)
-                .font(.system(size: 9, weight: .medium))
+                .font(ScopeTheme.Font.tag)
                 .foregroundColor(file.status.color)
-                .padding(.horizontal, 6)
-                .padding(.vertical, 2)
+                .padding(.horizontal, ScopeTheme.Spacing.xs)
+                .padding(.vertical, ScopeTheme.Spacing.xxxs)
                 .background(
-                    RoundedRectangle(cornerRadius: 3)
-                        .fill(file.status.color.opacity(0.12))
+                    RoundedRectangle(cornerRadius: ScopeTheme.Radius.small)
+                        .fill(file.status.color.opacity(ScopeTheme.Opacity.selection))
                 )
 
             // Stage/Unstage button
@@ -588,12 +588,12 @@ struct GitChangesView: View {
                     gitService.unstageFile(file)
                 } label: {
                     Image(systemName: "minus")
-                        .font(.system(size: 10, weight: .bold))
+                        .font(ScopeTheme.Font.caption)
                         .foregroundColor(.orange)
-                        .frame(width: 20, height: 20)
+                        .frame(width: ScopeTheme.Spacing.xl, height: ScopeTheme.Spacing.xl)
                         .background(
-                            RoundedRectangle(cornerRadius: 4)
-                                .fill(Color.orange.opacity(0.12))
+                            RoundedRectangle(cornerRadius: ScopeTheme.Radius.small)
+                                .fill(Color.orange.opacity(ScopeTheme.Opacity.selection))
                         )
                 }
                 .buttonStyle(.plain)
@@ -603,54 +603,54 @@ struct GitChangesView: View {
                     gitService.stageFile(file)
                 } label: {
                     Image(systemName: "plus")
-                        .font(.system(size: 10, weight: .bold))
+                        .font(ScopeTheme.Font.caption)
                         .foregroundColor(.green)
-                        .frame(width: 20, height: 20)
+                        .frame(width: ScopeTheme.Spacing.xl, height: ScopeTheme.Spacing.xl)
                         .background(
-                            RoundedRectangle(cornerRadius: 4)
-                                .fill(Color.green.opacity(0.12))
+                            RoundedRectangle(cornerRadius: ScopeTheme.Radius.small)
+                                .fill(Color.green.opacity(ScopeTheme.Opacity.selection))
                         )
                 }
                 .buttonStyle(.plain)
                 .help("Stage")
             }
         }
-        .padding(8)
+        .padding(ScopeTheme.Spacing.sm)
         .background(
-            RoundedRectangle(cornerRadius: 6)
-                .fill(Color(nsColor: .controlBackgroundColor).opacity(0.7))
+            RoundedRectangle(cornerRadius: ScopeTheme.Radius.small)
+                .fill(ScopeTheme.Colors.controlBg.opacity(0.7))
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 6)
-                .stroke(Color(nsColor: .separatorColor).opacity(0.3), lineWidth: 0.5)
+            RoundedRectangle(cornerRadius: ScopeTheme.Radius.small)
+                .stroke(ScopeTheme.Colors.separator.opacity(ScopeTheme.Opacity.subtleBorder), lineWidth: 0.5)
         )
     }
 
     // MARK: - Commit Row
 
     private func commitRow(_ entry: GitLogEntry) -> some View {
-        HStack(spacing: 8) {
+        HStack(spacing: ScopeTheme.Spacing.sm) {
             Text(entry.sha)
-                .font(.system(size: 11, weight: .medium, design: .monospaced))
+                .font(ScopeTheme.Font.mono)
                 .foregroundColor(.accentColor)
                 .frame(width: 60, alignment: .leading)
 
             Text(entry.message)
-                .font(.system(size: 12))
+                .font(ScopeTheme.Font.footnote)
                 .foregroundColor(.primary)
                 .lineLimit(1)
 
             Spacer()
 
             Text(entry.relativeDate)
-                .font(.system(size: 10))
+                .font(ScopeTheme.Font.caption)
                 .foregroundColor(.secondary)
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
+        .padding(.horizontal, ScopeTheme.Spacing.md)
+        .padding(.vertical, ScopeTheme.Spacing.xs)
         .background(
-            RoundedRectangle(cornerRadius: 6)
-                .fill(Color(nsColor: .controlBackgroundColor).opacity(0.5))
+            RoundedRectangle(cornerRadius: ScopeTheme.Radius.small)
+                .fill(ScopeTheme.Colors.controlBg.opacity(0.5))
         )
     }
 
@@ -706,14 +706,14 @@ struct GitChangesView: View {
                 }
             }
         } label: {
-            VStack(alignment: .leading, spacing: 6) {
-                HStack(spacing: 6) {
+            VStack(alignment: .leading, spacing: ScopeTheme.Spacing.xs) {
+                HStack(spacing: ScopeTheme.Spacing.xs) {
                     Text("#\(pr.number)")
-                        .font(.system(size: 11, weight: .medium, design: .monospaced))
+                        .font(ScopeTheme.Font.mono)
                         .foregroundColor(.accentColor)
 
                     Text(pr.title)
-                        .font(.system(size: 12, weight: .medium))
+                        .font(ScopeTheme.Font.footnoteMedium)
                         .foregroundColor(.primary)
                         .lineLimit(1)
                         .truncationMode(.tail)
@@ -724,9 +724,9 @@ struct GitChangesView: View {
                     reviewIcon(pr.reviewDecision)
                 }
 
-                HStack(spacing: 8) {
+                HStack(spacing: ScopeTheme.Spacing.sm) {
                     Text(pr.author.login)
-                        .font(.system(size: 10))
+                        .font(ScopeTheme.Font.caption)
                         .foregroundColor(.secondary)
 
                     HStack(spacing: 3) {
@@ -736,42 +736,42 @@ struct GitChangesView: View {
                             .lineLimit(1)
                             .truncationMode(.tail)
                     }
-                    .font(.system(size: 10))
+                    .font(ScopeTheme.Font.caption)
                     .foregroundColor(.secondary)
 
                     if pr.isDraft {
                         Text("Draft")
-                            .font(.system(size: 9, weight: .medium))
+                            .font(ScopeTheme.Font.tag)
                             .foregroundColor(.orange)
-                            .padding(.horizontal, 5)
+                            .padding(.horizontal, ScopeTheme.Spacing.xxs)
                             .padding(.vertical, 1)
                             .background(Capsule().fill(Color.orange.opacity(0.15)))
                     }
 
                     Spacer()
 
-                    HStack(spacing: 4) {
+                    HStack(spacing: ScopeTheme.Spacing.xxs) {
                         Text("+\(pr.additions)")
-                            .font(.system(size: 10, weight: .medium, design: .monospaced))
+                            .font(ScopeTheme.Font.caption)
                             .foregroundColor(.green)
                         Text("-\(pr.deletions)")
-                            .font(.system(size: 10, weight: .medium, design: .monospaced))
+                            .font(ScopeTheme.Font.caption)
                             .foregroundColor(.red)
                     }
 
                     Text(relativeTime(pr.updatedAt))
-                        .font(.system(size: 10))
+                        .font(ScopeTheme.Font.caption)
                         .foregroundStyle(.tertiary)
                 }
             }
-            .padding(10)
+            .padding(ScopeTheme.Spacing.md)
             .background(
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(Color(nsColor: .controlBackgroundColor).opacity(0.7))
+                RoundedRectangle(cornerRadius: ScopeTheme.Radius.small)
+                    .fill(ScopeTheme.Colors.controlBg.opacity(0.7))
             )
             .overlay(
-                RoundedRectangle(cornerRadius: 8)
-                    .stroke(Color(nsColor: .separatorColor).opacity(0.3), lineWidth: 0.5)
+                RoundedRectangle(cornerRadius: ScopeTheme.Radius.small)
+                    .stroke(ScopeTheme.Colors.separator.opacity(ScopeTheme.Opacity.subtleBorder), lineWidth: 0.5)
             )
             .contentShape(Rectangle())
         }
@@ -786,16 +786,16 @@ struct GitChangesView: View {
                 NSWorkspace.shared.open(url)
             }
         } label: {
-            HStack(spacing: 8) {
+            HStack(spacing: ScopeTheme.Spacing.sm) {
                 workflowStatusIcon(status: workflow.status, conclusion: workflow.conclusion)
 
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: ScopeTheme.Spacing.xxxs) {
                     Text(workflow.name)
-                        .font(.system(size: 12, weight: .medium))
+                        .font(ScopeTheme.Font.footnoteMedium)
                         .foregroundColor(.primary)
                         .lineLimit(1)
 
-                    HStack(spacing: 6) {
+                    HStack(spacing: ScopeTheme.Spacing.xs) {
                         HStack(spacing: 3) {
                             Image(systemName: "arrow.triangle.branch")
                                 .font(.system(size: 8))
@@ -803,11 +803,11 @@ struct GitChangesView: View {
                                 .lineLimit(1)
                                 .truncationMode(.tail)
                         }
-                        .font(.system(size: 10))
+                        .font(ScopeTheme.Font.caption)
                         .foregroundColor(.secondary)
 
                         Text(workflow.event)
-                            .font(.system(size: 10))
+                            .font(ScopeTheme.Font.caption)
                             .foregroundColor(.secondary)
                     }
                 }
@@ -815,17 +815,17 @@ struct GitChangesView: View {
                 Spacer()
 
                 Text(relativeTime(workflow.createdAt))
-                    .font(.system(size: 10))
+                    .font(ScopeTheme.Font.caption)
                     .foregroundStyle(.tertiary)
             }
-            .padding(10)
+            .padding(ScopeTheme.Spacing.md)
             .background(
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(Color(nsColor: .controlBackgroundColor).opacity(0.7))
+                RoundedRectangle(cornerRadius: ScopeTheme.Radius.small)
+                    .fill(ScopeTheme.Colors.controlBg.opacity(0.7))
             )
             .overlay(
-                RoundedRectangle(cornerRadius: 8)
-                    .stroke(Color(nsColor: .separatorColor).opacity(0.3), lineWidth: 0.5)
+                RoundedRectangle(cornerRadius: ScopeTheme.Radius.small)
+                    .stroke(ScopeTheme.Colors.separator.opacity(ScopeTheme.Opacity.subtleBorder), lineWidth: 0.5)
             )
             .contentShape(Rectangle())
         }
@@ -843,14 +843,14 @@ struct GitChangesView: View {
                 }
             }
         } label: {
-            VStack(alignment: .leading, spacing: 6) {
-                HStack(spacing: 6) {
+            VStack(alignment: .leading, spacing: ScopeTheme.Spacing.xs) {
+                HStack(spacing: ScopeTheme.Spacing.xs) {
                     Text("#\(issue.number)")
-                        .font(.system(size: 11, weight: .medium, design: .monospaced))
+                        .font(ScopeTheme.Font.mono)
                         .foregroundColor(.accentColor)
 
                     Text(issue.title)
-                        .font(.system(size: 12, weight: .medium))
+                        .font(ScopeTheme.Font.footnoteMedium)
                         .foregroundColor(.primary)
                         .lineLimit(1)
                         .truncationMode(.tail)
@@ -858,18 +858,18 @@ struct GitChangesView: View {
                     Spacer()
 
                     Text(relativeTime(issue.updatedAt))
-                        .font(.system(size: 10))
+                        .font(ScopeTheme.Font.caption)
                         .foregroundStyle(.tertiary)
                 }
 
                 if !issue.labels.isEmpty {
-                    HStack(spacing: 4) {
+                    HStack(spacing: ScopeTheme.Spacing.xxs) {
                         ForEach(issue.labels, id: \.name) { label in
                             Text(label.name)
-                                .font(.system(size: 9, weight: .medium))
+                                .font(ScopeTheme.Font.tag)
                                 .foregroundColor(.white)
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
+                                .padding(.horizontal, ScopeTheme.Spacing.xs)
+                                .padding(.vertical, ScopeTheme.Spacing.xxxs)
                                 .background(
                                     Capsule()
                                         .fill(Color(hex: label.color) ?? Color.secondary)
@@ -878,14 +878,14 @@ struct GitChangesView: View {
                     }
                 }
             }
-            .padding(10)
+            .padding(ScopeTheme.Spacing.md)
             .background(
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(Color(nsColor: .controlBackgroundColor).opacity(0.7))
+                RoundedRectangle(cornerRadius: ScopeTheme.Radius.small)
+                    .fill(ScopeTheme.Colors.controlBg.opacity(0.7))
             )
             .overlay(
-                RoundedRectangle(cornerRadius: 8)
-                    .stroke(Color(nsColor: .separatorColor).opacity(0.3), lineWidth: 0.5)
+                RoundedRectangle(cornerRadius: ScopeTheme.Radius.small)
+                    .stroke(ScopeTheme.Colors.separator.opacity(ScopeTheme.Opacity.subtleBorder), lineWidth: 0.5)
             )
             .contentShape(Rectangle())
         }

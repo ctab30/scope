@@ -25,54 +25,51 @@ struct TaskDetailView: View {
     @State private var isDropTargeted = false
     @State private var notes: [TaskNote] = []
     @State private var newNoteText: String = ""
-    @State private var replyText = ""
-    @State private var isSendingReply = false
-    @State private var replySuccess: Bool?
-    @State private var emailContext: ProcessedEmail?
+
 
     var body: some View {
         VStack(spacing: 0) {
             // Header
             HStack {
                 Text("Task Details")
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(ScopeTheme.Font.headline)
                 Spacer()
 
                 // Source badge
                 Text(task.source.uppercased())
-                    .font(.system(size: 9, weight: .bold))
+                    .font(ScopeTheme.Font.tag)
                     .tracking(0.3)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
+                    .padding(.horizontal, ScopeTheme.Spacing.xs)
+                    .padding(.vertical, ScopeTheme.Spacing.xxxs)
                     .background(
-                        Capsule()
+                        RoundedRectangle(cornerRadius: 4)
                             .fill(task.source == "claude" || task.source == "ai-extracted"
-                                  ? Color.purple.opacity(0.12)
-                                  : Color(nsColor: .separatorColor).opacity(0.15))
+                                  ? Color.purple.opacity(ScopeTheme.Opacity.subtleBorder)
+                                  : ScopeTheme.Colors.separator.opacity(ScopeTheme.Opacity.subtleBorder))
                     )
                     .foregroundColor(task.source == "claude" || task.source == "ai-extracted" ? .purple : .secondary)
             }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 14)
+            .padding(.horizontal, ScopeTheme.Spacing.xl)
+            .padding(.vertical, ScopeTheme.Spacing.lg)
 
             Divider()
 
             ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
+                VStack(alignment: .leading, spacing: ScopeTheme.Spacing.lg) {
                     // Title
-                    VStack(alignment: .leading, spacing: 4) {
+                    VStack(alignment: .leading, spacing: ScopeTheme.Spacing.xxs) {
                         Text("Title")
-                            .font(.system(size: 11, weight: .semibold))
+                            .font(ScopeTheme.Font.footnoteSemibold)
                             .foregroundColor(.secondary)
                         TextField("Task title", text: $title)
                             .textFieldStyle(.roundedBorder)
-                            .font(.system(size: 13))
+                            .font(ScopeTheme.Font.body)
                     }
 
                     // Project assignment
-                    VStack(alignment: .leading, spacing: 6) {
+                    VStack(alignment: .leading, spacing: ScopeTheme.Spacing.xs) {
                         Text("Project")
-                            .font(.system(size: 11, weight: .semibold))
+                            .font(ScopeTheme.Font.footnoteSemibold)
                             .foregroundColor(.secondary)
 
                         Picker("Project", selection: $selectedProjectId) {
@@ -88,112 +85,81 @@ struct TaskDetailView: View {
                     }
 
                     // Description
-                    VStack(alignment: .leading, spacing: 4) {
+                    VStack(alignment: .leading, spacing: ScopeTheme.Spacing.xxs) {
                         HStack {
                             Text("Description")
-                                .font(.system(size: 11, weight: .semibold))
+                                .font(ScopeTheme.Font.footnoteSemibold)
                                 .foregroundColor(.secondary)
                             Spacer()
 
                             // AI Enrich button
                             if claudeService.isGenerating {
-                                HStack(spacing: 4) {
+                                HStack(spacing: ScopeTheme.Spacing.xxs) {
                                     ProgressView()
                                         .scaleEffect(0.5)
                                     Text("Enriching...")
-                                        .font(.system(size: 10))
+                                        .font(ScopeTheme.Font.caption)
                                         .foregroundColor(.secondary)
                                 }
                             } else {
                                 Button {
                                     enrichWithAI()
                                 } label: {
-                                    HStack(spacing: 3) {
-                                        Image(systemName: "sparkles")
-                                            .font(.system(size: 9, weight: .semibold))
-                                        Text("Enrich with AI")
-                                            .font(.system(size: 10, weight: .semibold))
-                                    }
-                                    .foregroundColor(.purple)
-                                    .padding(.horizontal, 8)
-                                    .padding(.vertical, 3)
-                                    .background(Capsule().fill(Color.purple.opacity(0.1)))
+                                    Label("Enrich with AI", systemImage: "sparkles")
                                 }
-                                .buttonStyle(.plain)
+                                .buttonStyle(.bordered)
+                                .controlSize(.small)
                             }
                         }
 
                         TextEditor(text: $description)
-                            .font(.system(size: 12, design: .monospaced))
+                            .font(ScopeTheme.Font.mono)
                             .scrollContentBackground(.hidden)
-                            .padding(8)
+                            .padding(ScopeTheme.Spacing.sm)
                             .frame(minHeight: 120)
                             .background(
-                                RoundedRectangle(cornerRadius: 6)
-                                    .fill(Color(nsColor: .controlBackgroundColor).opacity(0.5))
+                                RoundedRectangle(cornerRadius: ScopeTheme.Radius.small, style: .continuous)
+                                    .fill(ScopeTheme.Colors.controlBg.opacity(0.5))
                             )
                             .overlay(
-                                RoundedRectangle(cornerRadius: 6)
-                                    .stroke(Color(nsColor: .separatorColor).opacity(0.3), lineWidth: 0.5)
+                                RoundedRectangle(cornerRadius: ScopeTheme.Radius.small, style: .continuous)
+                                    .stroke(ScopeTheme.Colors.separator.opacity(ScopeTheme.Opacity.border), lineWidth: 0.5)
                             )
 
                         if let error = enrichError {
-                            HStack(spacing: 4) {
+                            HStack(spacing: ScopeTheme.Spacing.xxs) {
                                 Image(systemName: "exclamationmark.triangle")
-                                    .font(.system(size: 10))
+                                    .font(ScopeTheme.Font.caption)
                                 Text(error)
-                                    .font(.system(size: 10))
+                                    .font(ScopeTheme.Font.caption)
                             }
                             .foregroundColor(.orange)
                         }
                     }
 
                     // Priority
-                    VStack(alignment: .leading, spacing: 6) {
+                    VStack(alignment: .leading, spacing: ScopeTheme.Spacing.xs) {
                         Text("Priority")
-                            .font(.system(size: 11, weight: .semibold))
+                            .font(ScopeTheme.Font.footnoteSemibold)
                             .foregroundColor(.secondary)
 
-                        HStack(spacing: 4) {
+                        Picker("Priority", selection: $priority) {
                             ForEach(TaskItem.Priority.allCases, id: \.rawValue) { level in
-                                Button {
-                                    priority = level.rawValue
-                                } label: {
-                                    HStack(spacing: 4) {
-                                        Image(systemName: level.icon)
-                                            .font(.system(size: 9, weight: .semibold))
-                                        Text(level.label)
-                                            .font(.system(size: 10, weight: .medium))
-                                    }
-                                    .padding(.horizontal, 10)
-                                    .padding(.vertical, 5)
-                                    .background(
-                                        RoundedRectangle(cornerRadius: 5)
-                                            .fill(priority == level.rawValue
-                                                  ? level.color.opacity(0.15)
-                                                  : Color(nsColor: .controlBackgroundColor).opacity(0.5))
-                                    )
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: 5)
-                                            .stroke(priority == level.rawValue
-                                                    ? level.color.opacity(0.3)
-                                                    : Color.clear, lineWidth: 0.5)
-                                    )
-                                    .foregroundColor(priority == level.rawValue ? level.color : .secondary)
-                                }
-                                .buttonStyle(.plain)
+                                Text(level.label).tag(level.rawValue)
                             }
                         }
+                        .pickerStyle(.segmented)
+                        .labelsHidden()
                     }
 
                     // Labels
-                    VStack(alignment: .leading, spacing: 6) {
+                    VStack(alignment: .leading, spacing: ScopeTheme.Spacing.xs) {
                         Text("Labels")
-                            .font(.system(size: 11, weight: .semibold))
+                            .font(ScopeTheme.Font.footnoteSemibold)
                             .foregroundColor(.secondary)
 
                         // Predefined labels
-                        FlowLayout(spacing: 4) {
+                        FlowLayout(spacing: ScopeTheme.Spacing.xxs) {
                             ForEach(TaskItem.predefinedLabels, id: \.self) { label in
                                 LabelChip(
                                     label: label,
@@ -210,10 +176,10 @@ struct TaskDetailView: View {
                         }
 
                         // Custom label input
-                        HStack(spacing: 6) {
+                        HStack(spacing: ScopeTheme.Spacing.xs) {
                             TextField("Add custom label", text: $customLabel)
                                 .textFieldStyle(.roundedBorder)
-                                .font(.system(size: 11))
+                                .font(ScopeTheme.Font.footnote)
                                 .frame(width: 150)
                                 .onSubmit {
                                     addCustomLabel()
@@ -222,14 +188,14 @@ struct TaskDetailView: View {
                             Button("Add") {
                                 addCustomLabel()
                             }
-                            .font(.system(size: 11))
+                            .font(ScopeTheme.Font.footnote)
                             .disabled(customLabel.trimmingCharacters(in: .whitespaces).isEmpty)
                         }
 
                         // Show custom labels that are selected but not predefined
                         let customSelected = selectedLabels.filter { !TaskItem.predefinedLabels.contains($0) }
                         if !customSelected.isEmpty {
-                            HStack(spacing: 4) {
+                            HStack(spacing: ScopeTheme.Spacing.xxs) {
                                 ForEach(Array(customSelected).sorted(), id: \.self) { label in
                                     LabelChip(label: label, isSelected: true, color: .secondary) {
                                         selectedLabels.remove(label)
@@ -240,52 +206,52 @@ struct TaskDetailView: View {
                     }
 
                     // Metadata
-                    VStack(alignment: .leading, spacing: 4) {
+                    VStack(alignment: .leading, spacing: ScopeTheme.Spacing.xxs) {
                         Text("Info")
-                            .font(.system(size: 11, weight: .semibold))
+                            .font(ScopeTheme.Font.footnoteSemibold)
                             .foregroundColor(.secondary)
 
-                        HStack(spacing: 12) {
+                        HStack(spacing: ScopeTheme.Spacing.md) {
                             Label(task.createdAt.formatted(.dateTime.month(.abbreviated).day().hour().minute()), systemImage: "calendar")
                             if let session = task.sourceSession {
                                 Label(String(session.prefix(8)), systemImage: "link")
                             }
                         }
-                        .font(.system(size: 10))
+                        .font(ScopeTheme.Font.caption)
                         .foregroundColor(.secondary)
                     }
 
                     // Notes thread
-                    VStack(alignment: .leading, spacing: 6) {
+                    VStack(alignment: .leading, spacing: ScopeTheme.Spacing.xs) {
                         HStack {
                             Text("Notes")
-                                .font(.system(size: 11, weight: .semibold))
+                                .font(ScopeTheme.Font.footnoteSemibold)
                                 .foregroundColor(.secondary)
                             if !notes.isEmpty {
                                 Text("(\(notes.count))")
-                                    .font(.system(size: 10))
+                                    .font(ScopeTheme.Font.caption)
                                     .foregroundStyle(.tertiary)
                             }
                         }
 
                         // Existing notes
                         if !notes.isEmpty {
-                            VStack(spacing: 4) {
+                            VStack(spacing: ScopeTheme.Spacing.xxs) {
                                 ForEach(notes) { note in
-                                    HStack(alignment: .top, spacing: 6) {
+                                    HStack(alignment: .top, spacing: ScopeTheme.Spacing.xs) {
                                         Image(systemName: noteIcon(note.source))
                                             .font(.system(size: 9))
                                             .foregroundColor(noteColor(note.source))
                                             .frame(width: 12, alignment: .center)
                                             .padding(.top, 2)
 
-                                        VStack(alignment: .leading, spacing: 2) {
+                                        VStack(alignment: .leading, spacing: ScopeTheme.Spacing.xxxs) {
                                             Text(settings.demoMode ? DemoContent.shared.mask(note.content, as: .snippet) : note.content)
-                                                .font(.system(size: 11))
+                                                .font(ScopeTheme.Font.footnote)
                                                 .foregroundColor(.primary.opacity(0.85))
 
                                             Text(note.createdAt.formatted(.dateTime.month(.abbreviated).day().hour().minute()))
-                                                .font(.system(size: 9))
+                                                .font(ScopeTheme.Font.tag)
                                                 .foregroundStyle(.tertiary)
                                         }
 
@@ -300,21 +266,21 @@ struct TaskDetailView: View {
                                         }
                                         .buttonStyle(.plain)
                                     }
-                                    .padding(.vertical, 4)
-                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, ScopeTheme.Spacing.xxs)
+                                    .padding(.horizontal, ScopeTheme.Spacing.xs)
                                     .background(
-                                        RoundedRectangle(cornerRadius: 4)
-                                            .fill(Color(nsColor: .controlBackgroundColor).opacity(0.4))
+                                        RoundedRectangle(cornerRadius: ScopeTheme.Radius.small, style: .continuous)
+                                            .fill(ScopeTheme.Colors.controlBg.opacity(0.4))
                                     )
                                 }
                             }
                         }
 
                         // Add note input
-                        HStack(spacing: 6) {
+                        HStack(spacing: ScopeTheme.Spacing.xs) {
                             TextField("Add a note...", text: $newNoteText)
                                 .textFieldStyle(.roundedBorder)
-                                .font(.system(size: 11))
+                                .font(ScopeTheme.Font.footnote)
                                 .onSubmit { addNote() }
 
                             Button {
@@ -331,20 +297,20 @@ struct TaskDetailView: View {
                     }
 
                     // Attachments
-                    VStack(alignment: .leading, spacing: 6) {
+                    VStack(alignment: .leading, spacing: ScopeTheme.Spacing.xs) {
                         HStack {
                             Text("Attachments")
-                                .font(.system(size: 11, weight: .semibold))
+                                .font(ScopeTheme.Font.footnoteSemibold)
                                 .foregroundColor(.secondary)
                             Spacer()
                             Button {
                                 pickImages()
                             } label: {
-                                HStack(spacing: 3) {
+                                HStack(spacing: ScopeTheme.Spacing.xxxs) {
                                     Image(systemName: "plus")
                                         .font(.system(size: 9, weight: .bold))
                                     Text("Add Image")
-                                        .font(.system(size: 10, weight: .medium))
+                                        .font(ScopeTheme.Font.caption)
                                 }
                                 .foregroundColor(.accentColor)
                             }
@@ -353,35 +319,35 @@ struct TaskDetailView: View {
 
                         // Drop zone + thumbnails
                         ZStack {
-                            RoundedRectangle(cornerRadius: 8)
+                            RoundedRectangle(cornerRadius: ScopeTheme.Radius.small, style: .continuous)
                                 .fill(isDropTargeted
-                                      ? Color.accentColor.opacity(0.08)
-                                      : Color(nsColor: .controlBackgroundColor).opacity(0.3))
-                            RoundedRectangle(cornerRadius: 8)
+                                      ? Color.accentColor.opacity(ScopeTheme.Opacity.hover)
+                                      : ScopeTheme.Colors.controlBg.opacity(0.3))
+                            RoundedRectangle(cornerRadius: ScopeTheme.Radius.small, style: .continuous)
                                 .strokeBorder(
                                     style: StrokeStyle(lineWidth: 1, dash: [5, 3])
                                 )
-                                .foregroundColor(isDropTargeted ? .accentColor : Color(nsColor: .separatorColor).opacity(0.3))
+                                .foregroundColor(isDropTargeted ? .accentColor : ScopeTheme.Colors.separator.opacity(ScopeTheme.Opacity.border))
 
                             if attachedImages.isEmpty {
-                                VStack(spacing: 4) {
+                                VStack(spacing: ScopeTheme.Spacing.xxs) {
                                     Image(systemName: "photo.on.rectangle.angled")
                                         .font(.system(size: 16))
                                         .foregroundStyle(.tertiary)
                                     Text("Drop images here")
-                                        .font(.system(size: 10))
+                                        .font(ScopeTheme.Font.caption)
                                         .foregroundStyle(.tertiary)
                                 }
                             } else {
                                 ScrollView(.horizontal, showsIndicators: false) {
-                                    HStack(spacing: 8) {
+                                    HStack(spacing: ScopeTheme.Spacing.sm) {
                                         ForEach(attachedImages, id: \.self) { path in
                                             AttachmentThumbnail(path: path) {
                                                 attachedImages.removeAll { $0 == path }
                                             }
                                         }
                                     }
-                                    .padding(8)
+                                    .padding(ScopeTheme.Spacing.sm)
                                 }
                             }
                         }
@@ -391,148 +357,15 @@ struct TaskDetailView: View {
                         }
                     }
 
-                    // Email context + reply (for email-sourced tasks)
-                    if task.gmailThreadId != nil {
-                        VStack(alignment: .leading, spacing: 6) {
-                            HStack {
-                                Image(systemName: "envelope.fill")
-                                    .font(.system(size: 11))
-                                    .foregroundColor(.green)
-                                Text("Email Source")
-                                    .font(.system(size: 11, weight: .semibold))
-                                    .foregroundColor(.secondary)
-                            }
-
-                            if let email = emailContext {
-                                VStack(alignment: .leading, spacing: 4) {
-                                    HStack {
-                                        Text("From: \(settings.demoMode ? DemoContent.shared.mask(email.fromName ?? email.fromAddress, as: .email) : (email.fromName ?? email.fromAddress))")
-                                            .font(.system(size: 11))
-                                        Spacer()
-                                        Text(email.receivedAt.formatted(.dateTime.month(.abbreviated).day().hour().minute()))
-                                            .font(.system(size: 10))
-                                            .foregroundStyle(.tertiary)
-                                    }
-                                    Text("Subject: \(settings.demoMode ? DemoContent.shared.mask(email.subject, as: .task) : email.subject)")
-                                        .font(.system(size: 11))
-                                        .foregroundColor(.secondary)
-
-                                    if let snippet = email.snippet, !snippet.isEmpty {
-                                        Text(settings.demoMode ? DemoContent.shared.mask(snippet, as: .snippet) : snippet)
-                                            .font(.system(size: 11))
-                                            .foregroundColor(.secondary)
-                                            .lineLimit(3)
-                                            .padding(8)
-                                            .background(
-                                                RoundedRectangle(cornerRadius: 4)
-                                                    .fill(Color(nsColor: .controlBackgroundColor).opacity(0.4))
-                                            )
-                                    }
-                                }
-
-                                // Open in Gmail button
-                                if let threadId = task.gmailThreadId {
-                                    Button {
-                                        if let url = URL(string: "https://mail.google.com/mail/u/0/#inbox/\(threadId)") {
-                                            NSWorkspace.shared.open(url)
-                                        }
-                                    } label: {
-                                        HStack(spacing: 4) {
-                                            Image(systemName: "arrow.up.forward")
-                                                .font(.system(size: 9))
-                                            Text("Open in Gmail")
-                                                .font(.system(size: 10, weight: .medium))
-                                        }
-                                        .foregroundColor(.blue)
-                                    }
-                                    .buttonStyle(.plain)
-                                }
-
-                                Divider()
-
-                                // Reply composer
-                                VStack(alignment: .leading, spacing: 6) {
-                                    Text("Reply")
-                                        .font(.system(size: 11, weight: .semibold))
-                                        .foregroundColor(.secondary)
-
-                                    TextEditor(text: $replyText)
-                                        .font(.system(size: 12))
-                                        .scrollContentBackground(.hidden)
-                                        .padding(8)
-                                        .frame(minHeight: 80)
-                                        .background(
-                                            RoundedRectangle(cornerRadius: 6)
-                                                .fill(Color(nsColor: .controlBackgroundColor).opacity(0.5))
-                                        )
-                                        .overlay(
-                                            RoundedRectangle(cornerRadius: 6)
-                                                .stroke(Color(nsColor: .separatorColor).opacity(0.3), lineWidth: 0.5)
-                                        )
-
-                                    HStack {
-                                        if let success = replySuccess {
-                                            HStack(spacing: 4) {
-                                                Image(systemName: success ? "checkmark.circle" : "xmark.circle")
-                                                    .font(.system(size: 10))
-                                                Text(success ? "Reply sent" : "Failed to send")
-                                                    .font(.system(size: 10))
-                                            }
-                                            .foregroundColor(success ? .green : .red)
-                                        }
-
-                                        Spacer()
-
-                                        Button {
-                                            sendReply(email: email)
-                                        } label: {
-                                            HStack(spacing: 4) {
-                                                if isSendingReply {
-                                                    ProgressView()
-                                                        .scaleEffect(0.5)
-                                                }
-                                                Image(systemName: "paperplane.fill")
-                                                    .font(.system(size: 10))
-                                                Text("Send Reply")
-                                                    .font(.system(size: 11, weight: .medium))
-                                            }
-                                            .padding(.horizontal, 12)
-                                            .padding(.vertical, 6)
-                                            .background(Color.green.opacity(0.15))
-                                            .foregroundColor(.green)
-                                            .cornerRadius(6)
-                                        }
-                                        .buttonStyle(.plain)
-                                        .disabled(replyText.trimmingCharacters(in: .whitespaces).isEmpty || isSendingReply)
-                                    }
-                                }
-                            }
-                        }
-                    }
-
                     // Launch as Claude session
                     Button {
                         launchAsSession()
                     } label: {
-                        HStack(spacing: 6) {
-                            Image(systemName: "play.fill")
-                                .font(.system(size: 10))
-                            Text("Launch as Claude Session")
-                                .font(.system(size: 12, weight: .medium))
-                        }
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 7)
-                        .background(Color.accentColor.opacity(0.15))
-                        .foregroundColor(.accentColor)
-                        .cornerRadius(7)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 7)
-                                .stroke(Color.accentColor.opacity(0.25), lineWidth: 0.5)
-                        )
+                        Label("Launch as Claude Session", systemImage: "play.fill")
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.borderedProminent)
                 }
-                .padding(20)
+                .padding(ScopeTheme.Spacing.xl)
             }
 
             Divider()
@@ -543,11 +376,11 @@ struct TaskDetailView: View {
                     onDelete(task)
                     dismiss()
                 } label: {
-                    HStack(spacing: 4) {
+                    HStack(spacing: ScopeTheme.Spacing.xxs) {
                         Image(systemName: "trash")
-                            .font(.system(size: 10))
+                            .font(ScopeTheme.Font.caption)
                         Text("Delete")
-                            .font(.system(size: 11, weight: .medium))
+                            .font(ScopeTheme.Font.footnoteMedium)
                     }
                     .foregroundColor(.red)
                 }
@@ -565,8 +398,8 @@ struct TaskDetailView: View {
                 }
                 .keyboardShortcut(.defaultAction)
             }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 12)
+            .padding(.horizontal, ScopeTheme.Spacing.xl)
+            .padding(.vertical, ScopeTheme.Spacing.md)
         }
         .frame(width: 520, height: 740)
         .onAppear {
@@ -577,7 +410,6 @@ struct TaskDetailView: View {
             selectedLabels = Set(task.labelsArray)
             attachedImages = task.attachmentsArray
             loadNotes()
-            loadEmailContext()
         }
     }
 
@@ -771,53 +603,6 @@ struct TaskDetailView: View {
         }
     }
 
-    // MARK: - Email Reply
-
-    private func loadEmailContext() {
-        guard let msgId = task.gmailMessageId else { return }
-        do {
-            emailContext = try DatabaseService.shared.dbQueue.read { db in
-                try ProcessedEmail
-                    .filter(Column("gmailMessageId") == msgId)
-                    .fetchOne(db)
-            }
-        } catch {
-            print("TaskDetailView: failed to load email context: \(error)")
-        }
-    }
-
-    private func sendReply(email: ProcessedEmail) {
-        guard !replyText.trimmingCharacters(in: .whitespaces).isEmpty else { return }
-        isSendingReply = true
-        replySuccess = nil
-
-        Task {
-            let oauth = GoogleOAuthManager()
-            let api = GmailAPIService(oauthManager: oauth)
-
-            let success = await api.sendReply(
-                accountId: email.gmailAccountId,
-                threadId: email.gmailThreadId,
-                inReplyTo: email.gmailMessageId,
-                to: email.fromAddress,
-                subject: email.subject,
-                body: replyText
-            )
-
-            isSendingReply = false
-            replySuccess = success
-            if success {
-                replyText = ""
-                // Mark as replied
-                try? await DatabaseService.shared.dbQueue.write { db in
-                    try db.execute(
-                        sql: "UPDATE processedEmails SET repliedAt = ? WHERE gmailMessageId = ?",
-                        arguments: [Date(), email.gmailMessageId]
-                    )
-                }
-            }
-        }
-    }
 }
 
 // MARK: - Label Chip
@@ -831,16 +616,16 @@ struct LabelChip: View {
     var body: some View {
         Button(action: action) {
             Text(label)
-                .font(.system(size: 10, weight: .medium))
-                .padding(.horizontal, 8)
-                .padding(.vertical, 3)
+                .font(ScopeTheme.Font.caption)
+                .padding(.horizontal, ScopeTheme.Spacing.sm)
+                .padding(.vertical, ScopeTheme.Spacing.xxxs)
                 .background(
-                    Capsule()
-                        .fill(isSelected ? color.opacity(0.15) : Color(nsColor: .controlBackgroundColor).opacity(0.5))
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(isSelected ? color.opacity(0.15) : ScopeTheme.Colors.controlBg.opacity(0.5))
                 )
                 .overlay(
-                    Capsule()
-                        .stroke(isSelected ? color.opacity(0.3) : Color(nsColor: .separatorColor).opacity(0.2), lineWidth: 0.5)
+                    RoundedRectangle(cornerRadius: 4)
+                        .strokeBorder(isSelected ? color.opacity(ScopeTheme.Opacity.border) : ScopeTheme.Colors.separator.opacity(ScopeTheme.Opacity.border), lineWidth: 0.5)
                 )
                 .foregroundColor(isSelected ? color : .secondary)
         }
@@ -861,17 +646,17 @@ struct AttachmentThumbnail: View {
                     .resizable()
                     .aspectRatio(contentMode: .fill)
                     .frame(width: 64, height: 64)
-                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                    .clipShape(RoundedRectangle(cornerRadius: ScopeTheme.Radius.small, style: .continuous))
                     .overlay(
-                        RoundedRectangle(cornerRadius: 6)
-                            .stroke(Color(nsColor: .separatorColor).opacity(0.3), lineWidth: 0.5)
+                        RoundedRectangle(cornerRadius: ScopeTheme.Radius.small, style: .continuous)
+                            .stroke(ScopeTheme.Colors.separator.opacity(ScopeTheme.Opacity.border), lineWidth: 0.5)
                     )
             } else {
-                RoundedRectangle(cornerRadius: 6)
-                    .fill(Color(nsColor: .controlBackgroundColor))
+                RoundedRectangle(cornerRadius: ScopeTheme.Radius.small, style: .continuous)
+                    .fill(ScopeTheme.Colors.controlBg)
                     .frame(width: 64, height: 64)
                     .overlay {
-                        VStack(spacing: 2) {
+                        VStack(spacing: ScopeTheme.Spacing.xxxs) {
                             Image(systemName: "photo")
                                 .font(.system(size: 14))
                                 .foregroundStyle(.tertiary)

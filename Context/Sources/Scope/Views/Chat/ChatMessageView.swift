@@ -25,20 +25,20 @@ struct ChatMessageView: View {
     // MARK: - User Bubble
 
     private var userBubble: some View {
-        VStack(alignment: .trailing, spacing: 2) {
+        VStack(alignment: .trailing, spacing: ScopeTheme.Spacing.xxxs) {
             Text(message.content)
-                .font(.system(size: 12))
+                .font(ScopeTheme.Font.body)
                 .foregroundColor(.white)
                 .textSelection(.enabled)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
+                .padding(.horizontal, ScopeTheme.Spacing.md)
+                .padding(.vertical, ScopeTheme.Spacing.sm)
                 .background(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    RoundedRectangle(cornerRadius: ScopeTheme.Radius.medium, style: .continuous)
                         .fill(Color.accentColor)
                 )
 
             Text(message.createdAt.formatted(.dateTime.hour().minute()))
-                .font(.system(size: 9))
+                .font(ScopeTheme.Font.tag)
                 .foregroundStyle(.quaternary)
         }
     }
@@ -46,17 +46,17 @@ struct ChatMessageView: View {
     // MARK: - Assistant Bubble
 
     private var assistantBubble: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: ScopeTheme.Spacing.xxs) {
             MarkdownContentView(content: message.content)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
+                .padding(.horizontal, ScopeTheme.Spacing.md)
+                .padding(.vertical, ScopeTheme.Spacing.sm)
                 .background(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .fill(Color(nsColor: .windowBackgroundColor))
+                    ScopeTheme.Colors.controlBg,
+                    in: RoundedRectangle(cornerRadius: ScopeTheme.Radius.small, style: .continuous)
                 )
                 .overlay(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .stroke(Color(nsColor: .separatorColor).opacity(0.4), lineWidth: 0.5)
+                    RoundedRectangle(cornerRadius: ScopeTheme.Radius.small, style: .continuous)
+                        .strokeBorder(ScopeTheme.Colors.separator.opacity(ScopeTheme.Opacity.subtleBorder), lineWidth: 0.5)
                 )
 
             // Action buttons — show on hover
@@ -84,7 +84,7 @@ struct ChatMessageView: View {
             }
 
             Text(message.createdAt.formatted(.dateTime.hour().minute()))
-                .font(.system(size: 9))
+                .font(ScopeTheme.Font.tag)
                 .foregroundStyle(.quaternary)
         }
         .onHover { hovering in
@@ -98,25 +98,10 @@ struct ChatMessageView: View {
 
     private func actionButton(_ label: String, icon: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            HStack(spacing: 3) {
-                Image(systemName: icon)
-                    .font(.system(size: 8))
-                Text(label)
-                    .font(.system(size: 9, weight: .medium))
-            }
-            .padding(.horizontal, 6)
-            .padding(.vertical, 3)
-            .background(
-                RoundedRectangle(cornerRadius: 4)
-                    .fill(Color(nsColor: .controlBackgroundColor))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 4)
-                    .stroke(Color(nsColor: .separatorColor).opacity(0.3), lineWidth: 0.5)
-            )
+            Label(label, systemImage: icon)
         }
-        .buttonStyle(.plain)
-        .foregroundColor(.secondary)
+        .buttonStyle(.bordered)
+        .controlSize(.small)
     }
 }
 
@@ -127,7 +112,7 @@ private struct MarkdownContentView: View {
     let content: String
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: ScopeTheme.Spacing.xs) {
             ForEach(Array(parseBlocks().enumerated()), id: \.offset) { _, block in
                 blockView(block)
             }
@@ -273,28 +258,28 @@ private struct MarkdownContentView: View {
 
         case .paragraph(let text):
             inlineText(text)
-                .font(.system(size: 12))
+                .font(ScopeTheme.Font.body)
 
         case .listItem(let text):
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
+            HStack(alignment: .firstTextBaseline, spacing: ScopeTheme.Spacing.xs) {
                 Text("\u{2022}")
-                    .font(.system(size: 12))
+                    .font(ScopeTheme.Font.body)
                     .foregroundColor(.secondary)
                 inlineText(text)
-                    .font(.system(size: 12))
+                    .font(ScopeTheme.Font.body)
             }
-            .padding(.leading, 4)
+            .padding(.leading, ScopeTheme.Spacing.xxs)
 
         case .numberedItem(let number, let text):
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
+            HStack(alignment: .firstTextBaseline, spacing: ScopeTheme.Spacing.xs) {
                 Text("\(number).")
-                    .font(.system(size: 12))
+                    .font(ScopeTheme.Font.body)
                     .foregroundColor(.secondary)
-                    .frame(minWidth: 16, alignment: .trailing)
+                    .frame(minWidth: ScopeTheme.Spacing.lg, alignment: .trailing)
                 inlineText(text)
-                    .font(.system(size: 12))
+                    .font(ScopeTheme.Font.body)
             }
-            .padding(.leading, 4)
+            .padding(.leading, ScopeTheme.Spacing.xxs)
 
         case .blockquote(let text):
             HStack(spacing: 0) {
@@ -302,31 +287,31 @@ private struct MarkdownContentView: View {
                     .fill(Color.accentColor.opacity(0.5))
                     .frame(width: 3)
                 inlineText(text)
-                    .font(.system(size: 12))
+                    .font(ScopeTheme.Font.body)
                     .italic()
                     .foregroundStyle(.secondary)
-                    .padding(.leading, 8)
+                    .padding(.leading, ScopeTheme.Spacing.sm)
             }
-            .padding(.vertical, 2)
+            .padding(.vertical, ScopeTheme.Spacing.xxxs)
 
         case .codeBlock(let code, _):
             Text(code)
-                .font(.system(size: 11, design: .monospaced))
-                .padding(8)
+                .font(ScopeTheme.Font.mono)
+                .padding(ScopeTheme.Spacing.sm)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(
-                    RoundedRectangle(cornerRadius: 6)
-                        .fill(Color(nsColor: .textBackgroundColor).opacity(0.5))
+                    RoundedRectangle(cornerRadius: ScopeTheme.Radius.small)
+                        .fill(ScopeTheme.Colors.textBg.opacity(0.5))
                 )
                 .overlay(
-                    RoundedRectangle(cornerRadius: 6)
-                        .stroke(Color(nsColor: .separatorColor).opacity(0.3), lineWidth: 0.5)
+                    RoundedRectangle(cornerRadius: ScopeTheme.Radius.small)
+                        .stroke(ScopeTheme.Colors.separator.opacity(ScopeTheme.Opacity.subtleBorder), lineWidth: 0.5)
                 )
                 .textSelection(.enabled)
 
         case .divider:
             Divider()
-                .padding(.vertical, 2)
+                .padding(.vertical, ScopeTheme.Spacing.xxxs)
         }
     }
 
@@ -363,7 +348,7 @@ private struct MarkdownContentView: View {
                 .firstIndex(of: "`") {
                 let inner = remaining[remaining.index(after: remaining.startIndex)..<endIdx]
                 result = result + Text(inner)
-                    .font(.system(size: 11, design: .monospaced))
+                    .font(ScopeTheme.Font.mono)
                     .foregroundColor(Color(nsColor: .systemOrange))
                 remaining = remaining[remaining.index(after: endIdx)...]
                 continue

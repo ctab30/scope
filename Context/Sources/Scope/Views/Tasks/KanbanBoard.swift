@@ -16,46 +16,32 @@ struct KanbanBoard: View {
             // Toolbar
             HStack {
                 Text("Task Board")
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(ScopeTheme.Font.bodySemibold)
 
                 Spacer()
 
                 // Task counts
-                HStack(spacing: 8) {
+                HStack(spacing: ScopeTheme.Spacing.sm) {
                     Label("\(todoTasks.count + inProgressTasks.count) open", systemImage: "circle.dotted")
                     Label("\(doneTasks.count) done", systemImage: "checkmark.circle")
                 }
-                .font(.system(size: 10))
+                .font(ScopeTheme.Font.caption)
                 .foregroundColor(.secondary)
 
                 Button {
                     showingNewTask = true
                 } label: {
-                    HStack(spacing: 4) {
-                        Image(systemName: "plus")
-                            .font(.system(size: 10, weight: .semibold))
-                        Text("New Task")
-                            .font(.system(size: 11, weight: .medium))
-                    }
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 5)
-                    .background(Color.accentColor.opacity(0.15))
-                    .foregroundColor(.accentColor)
-                    .cornerRadius(6)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 6)
-                            .stroke(Color.accentColor.opacity(0.2), lineWidth: 0.5)
-                    )
+                    Label("New Task", systemImage: "plus")
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.bordered)
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 10)
+            .padding(.horizontal, ScopeTheme.Spacing.lg)
+            .padding(.vertical, ScopeTheme.Spacing.md)
 
             Divider()
 
             // Three-column Kanban with drag-and-drop
-            HStack(alignment: .top, spacing: 10) {
+            HStack(spacing: 0) {
                 KanbanColumn(
                     title: "Todo",
                     icon: "circle",
@@ -73,6 +59,7 @@ struct KanbanBoard: View {
                         Button("Delete", role: .destructive) { deleteTask(task) }
                     }
                 )
+                Divider()
                 KanbanColumn(
                     title: "In Progress",
                     icon: "circle.lefthalf.filled",
@@ -91,6 +78,7 @@ struct KanbanBoard: View {
                         Button("Delete", role: .destructive) { deleteTask(task) }
                     }
                 )
+                Divider()
                 KanbanColumn(
                     title: "Done",
                     icon: "checkmark.circle.fill",
@@ -108,7 +96,6 @@ struct KanbanBoard: View {
                     }
                 )
             }
-            .padding(12)
         }
         .sheet(isPresented: $showingNewTask) {
             NewTaskSheet(isPresented: $showingNewTask, onCreate: { task in
@@ -285,41 +272,33 @@ struct KanbanColumn<MenuContent: View>: View {
     var body: some View {
         VStack(spacing: 0) {
             // Header
-            HStack(spacing: 6) {
-                Image(systemName: icon)
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundColor(color)
+            HStack(spacing: ScopeTheme.Spacing.xs) {
+                Rectangle()
+                    .fill(color)
+                    .frame(width: 3, height: 12)
+                    .clipShape(RoundedRectangle(cornerRadius: 1.5))
                 Text(title)
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(ScopeTheme.Font.footnoteSemibold)
                 Spacer()
                 Text("\(tasks.count)")
-                    .font(.system(size: 11, weight: .medium, design: .rounded))
+                    .font(ScopeTheme.Font.caption)
                     .foregroundColor(.secondary)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 1)
-                    .background(
-                        Capsule()
-                            .fill(Color(nsColor: .separatorColor).opacity(0.15))
-                    )
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 8)
+            .padding(.horizontal, ScopeTheme.Spacing.sm)
+            .padding(.vertical, ScopeTheme.Spacing.sm)
 
-            // Thin colored accent bar
-            Rectangle()
-                .fill(color.opacity(0.4))
-                .frame(height: 1.5)
+            Divider()
 
             // Task list (drop target)
             ScrollView {
                 if tasks.isEmpty {
                     Text("No tasks")
-                        .font(.system(size: 11))
+                        .font(ScopeTheme.Font.footnote)
                         .foregroundStyle(.tertiary)
                         .frame(maxWidth: .infinity)
-                        .padding(.vertical, 20)
+                        .padding(.vertical, ScopeTheme.Spacing.xl)
                 } else {
-                    LazyVStack(spacing: 6) {
+                    LazyVStack(spacing: 1) {
                         ForEach(tasks) { task in
                             TaskCardView(
                                 task: task,
@@ -336,7 +315,7 @@ struct KanbanColumn<MenuContent: View>: View {
                             }
                         }
                     }
-                    .padding(8)
+                    .padding(.vertical, ScopeTheme.Spacing.xxs)
                 }
             }
             .frame(maxHeight: .infinity)
@@ -352,16 +331,7 @@ struct KanbanColumn<MenuContent: View>: View {
                 return true
             }
         }
-        .background(
-            RoundedRectangle(cornerRadius: 10)
-                .fill(isDropTargeted
-                      ? color.opacity(0.06)
-                      : Color(nsColor: .underPageBackgroundColor).opacity(0.5))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 10)
-                .strokeBorder(isDropTargeted ? color.opacity(0.35) : Color.clear, lineWidth: 1.5)
-        )
+        .background(isDropTargeted ? color.opacity(0.04) : Color.clear)
         .animation(.easeInOut(duration: 0.15), value: isDropTargeted)
     }
 }
@@ -380,45 +350,41 @@ struct NewTaskSheet: View {
     @State private var selectedLabels: Set<String> = []
 
     var body: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: ScopeTheme.Spacing.lg) {
             Text("New Task")
-                .font(.system(size: 15, weight: .semibold))
+                .font(ScopeTheme.Font.headline)
 
-            VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: ScopeTheme.Spacing.md) {
                 TextField("Task title", text: $title)
                     .textFieldStyle(.roundedBorder)
-                    .font(.system(size: 13))
+                    .font(ScopeTheme.Font.body)
 
                 // Description
                 TextEditor(text: $description)
-                    .font(.system(size: 12))
+                    .font(ScopeTheme.Font.footnote)
                     .scrollContentBackground(.hidden)
-                    .padding(6)
+                    .padding(ScopeTheme.Spacing.xs)
                     .frame(height: 80)
                     .background(
-                        RoundedRectangle(cornerRadius: 8)
-                            .fill(Color(nsColor: .textBackgroundColor).opacity(0.5))
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 8)
-                            .strokeBorder(Color(nsColor: .separatorColor).opacity(0.2), lineWidth: 0.5)
+                        RoundedRectangle(cornerRadius: 4, style: .continuous)
+                            .fill(ScopeTheme.Colors.textBg.opacity(0.3))
                     )
 
                 // Priority
-                HStack(spacing: 4) {
+                HStack(spacing: ScopeTheme.Spacing.xxs) {
                     Text("Priority:")
-                        .font(.system(size: 11, weight: .medium))
+                        .font(ScopeTheme.Font.footnoteMedium)
                         .foregroundColor(.secondary)
                     ForEach(TaskItem.Priority.allCases, id: \.rawValue) { level in
                         Button {
                             priority = level.rawValue
                         } label: {
                             Text(level.label)
-                                .font(.system(size: 10, weight: .medium))
-                                .padding(.horizontal, 8)
+                                .font(ScopeTheme.Font.caption)
+                                .padding(.horizontal, ScopeTheme.Spacing.sm)
                                 .padding(.vertical, 3)
                                 .background(
-                                    Capsule()
+                                    RoundedRectangle(cornerRadius: 4)
                                         .fill(priority == level.rawValue
                                               ? level.color.opacity(0.15)
                                               : Color.clear)
@@ -430,9 +396,9 @@ struct NewTaskSheet: View {
                 }
 
                 // Labels
-                HStack(spacing: 4) {
+                HStack(spacing: ScopeTheme.Spacing.xxs) {
                     Text("Labels:")
-                        .font(.system(size: 11, weight: .medium))
+                        .font(ScopeTheme.Font.footnoteMedium)
                         .foregroundColor(.secondary)
                     ForEach(TaskItem.predefinedLabels.prefix(6), id: \.self) { label in
                         Button {
@@ -443,15 +409,15 @@ struct NewTaskSheet: View {
                             }
                         } label: {
                             Text(label)
-                                .font(.system(size: 9, weight: .semibold))
+                                .font(ScopeTheme.Font.tag)
                                 .textCase(.uppercase)
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
+                                .padding(.horizontal, ScopeTheme.Spacing.xs)
+                                .padding(.vertical, ScopeTheme.Spacing.xxxs)
                                 .background(
-                                    Capsule()
+                                    RoundedRectangle(cornerRadius: 4)
                                         .fill(selectedLabels.contains(label)
                                               ? TaskItem.labelColor(for: label).opacity(0.15)
-                                              : Color(nsColor: .separatorColor).opacity(0.1))
+                                              : ScopeTheme.Colors.separator.opacity(ScopeTheme.Opacity.badge))
                                 )
                                 .foregroundColor(selectedLabels.contains(label)
                                                  ? TaskItem.labelColor(for: label)
@@ -463,7 +429,7 @@ struct NewTaskSheet: View {
             }
             .frame(width: 400)
 
-            HStack(spacing: 12) {
+            HStack(spacing: ScopeTheme.Spacing.md) {
                 Button("Cancel") {
                     isPresented = false
                 }
@@ -494,6 +460,6 @@ struct NewTaskSheet: View {
                 .disabled(title.trimmingCharacters(in: .whitespaces).isEmpty)
             }
         }
-        .padding(24)
+        .padding(ScopeTheme.Spacing.xxl)
     }
 }

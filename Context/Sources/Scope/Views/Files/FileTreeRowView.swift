@@ -7,39 +7,39 @@ struct FileTreeRowView: View {
     @State private var isHovering = false
 
     var body: some View {
-        HStack(spacing: 4) {
+        HStack(spacing: ScopeTheme.Spacing.xxs) {
             // Chevron for directories
             if node.isDirectory {
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 9, weight: .semibold))
+                    .font(ScopeTheme.Font.tag)
                     .foregroundColor(.secondary)
                     .rotationEffect(.degrees(node.isExpanded ? 90 : 0))
-                    .frame(width: 12, height: 12)
+                    .frame(width: ScopeTheme.Spacing.md, height: ScopeTheme.Spacing.md)
             } else {
-                Spacer().frame(width: 12)
+                Spacer().frame(width: ScopeTheme.Spacing.md)
             }
 
             // File/folder icon
             fileIcon
-                .font(.system(size: 12))
-                .frame(width: 16)
+                .font(ScopeTheme.Font.footnote)
+                .frame(width: ScopeTheme.Spacing.lg)
 
             // Filename
             Text(node.name)
-                .font(.system(size: 12, weight: node.isDirectory ? .medium : .regular))
+                .font(node.isDirectory ? ScopeTheme.Font.footnoteMedium : ScopeTheme.Font.footnote)
                 .lineLimit(1)
                 .truncationMode(.middle)
 
             Spacer()
         }
-        .padding(.leading, CGFloat(node.depth) * 16)
-        .padding(.horizontal, 8)
-        .padding(.vertical, 5)
+        .padding(.leading, CGFloat(node.depth) * ScopeTheme.Spacing.lg)
+        .padding(.horizontal, ScopeTheme.Spacing.sm)
+        .padding(.vertical, ScopeTheme.Spacing.xxs)
         .background(
-            RoundedRectangle(cornerRadius: 5)
+            RoundedRectangle(cornerRadius: ScopeTheme.Radius.small)
                 .fill(isSelected
-                      ? Color.accentColor.opacity(0.15)
-                      : isHovering ? Color(nsColor: .separatorColor).opacity(0.15) : Color.clear)
+                      ? Color.accentColor.opacity(ScopeTheme.Opacity.selection)
+                      : isHovering ? ScopeTheme.Colors.separator.opacity(ScopeTheme.Opacity.selection) : Color.clear)
         )
         .contentShape(Rectangle())
         .onHover { hovering in

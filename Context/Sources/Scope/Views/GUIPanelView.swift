@@ -84,7 +84,6 @@ struct GUIPanelView: View {
     @StateObject private var browserViewModel = BrowserViewModel()
     @StateObject private var browserCommandExecutor = BrowserCommandExecutor()
     @State private var showChatDrawer = false
-    @State private var showBriefingDrawer = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -94,29 +93,14 @@ struct GUIPanelView: View {
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
                     // Home view header
-                    HStack(spacing: 10) {
-                        RoundedRectangle(cornerRadius: 6)
-                            .fill(Color.accentColor.gradient)
-                            .frame(width: 28, height: 28)
-                            .overlay(
-                                Image(systemName: "house.fill")
-                                    .font(.system(size: 13, weight: .medium))
-                                    .foregroundColor(.white)
-                            )
-                        VStack(alignment: .leading, spacing: 1) {
-                            Text("Planner")
-                                .font(.system(size: 13, weight: .semibold))
-                            Text("Global tasks & emails")
-                                .font(.system(size: 10))
-                                .foregroundColor(.secondary)
-                        }
+                    HStack {
+                        Text("Planner")
+                            .font(.title3.weight(.semibold))
                         Spacer()
-                        BriefingBellView(showDrawer: $showBriefingDrawer)
-                        chatButton
                         MCPIndicator(connections: mcpMonitor.connections, currentProjectId: nil)
                     }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 10)
+                    .padding(.horizontal, ScopeTheme.Spacing.lg)
+                    .padding(.vertical, ScopeTheme.Spacing.sm)
 
                     Divider()
 
@@ -127,15 +111,15 @@ struct GUIPanelView: View {
             } else {
                 // Project header (simplified — no dropdown picker)
                 projectHeader
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 10)
+                    .padding(.horizontal, ScopeTheme.Spacing.lg)
+                    .padding(.vertical, ScopeTheme.Spacing.sm)
 
                 Divider()
 
                 // Tab bar
                 tabBar
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
+                    .padding(.horizontal, ScopeTheme.Spacing.md)
+                    .padding(.vertical, ScopeTheme.Spacing.sm)
 
                 Divider()
 
@@ -160,20 +144,8 @@ struct GUIPanelView: View {
                                 NoteListView()
                             case .files:
                                 FileBrowserView()
-                            case .memory:
-                                MemoryEditorView()
-                            case .rules:
-                                ClaudeMdEditorView()
-                            case .services:
-                                ProjectServicesView()
                             case .git:
                                 GitChangesView()
-                            case .images:
-                                ImageStudioView()
-                            case .visualize:
-                                VisualizerView()
-                            case .recordings:
-                                RecordingsView()
                             case .browser:
                                 EmptyView() // Handled above in ZStack
                             }
@@ -183,42 +155,9 @@ struct GUIPanelView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
-        .background(Color(nsColor: .windowBackgroundColor))
-        .overlay(alignment: .trailing) {
-            if showChatDrawer {
-                HStack(spacing: 0) {
-                    // Backdrop
-                    Color.black.opacity(0.15)
-                        .ignoresSafeArea()
-                        .onTapGesture {
-                            withAnimation(.easeInOut(duration: 0.2)) {
-                                showChatDrawer = false
-                            }
-                        }
-
-                    // Drawer
-                    ChatDrawerView(isOpen: $showChatDrawer)
-                        .transition(.move(edge: .trailing))
-                }
-            }
-        }
-        .overlay(alignment: .trailing) {
-            if showBriefingDrawer {
-                HStack(spacing: 0) {
-                    Color.black.opacity(0.15)
-                        .ignoresSafeArea()
-                        .onTapGesture {
-                            withAnimation(.easeInOut(duration: 0.2)) {
-                                showBriefingDrawer = false
-                            }
-                        }
-
-                    BriefingDrawerView(showDrawer: $showBriefingDrawer)
-                        .frame(width: 400)
-                        .background(.ultraThinMaterial)
-                        .transition(.move(edge: .trailing))
-                }
-            }
+        .inspector(isPresented: $showChatDrawer) {
+            ChatDrawerView(isOpen: $showChatDrawer)
+                .inspectorColumnWidth(min: 300, ideal: 380, max: 450)
         }
         .onAppear {
             mcpMonitor.startPolling()
@@ -233,23 +172,14 @@ struct GUIPanelView: View {
     // MARK: - Project Header
 
     private var projectHeader: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: ScopeTheme.Spacing.md) {
             if let project = appState.currentProject {
-                RoundedRectangle(cornerRadius: 6)
-                    .fill(Color.accentColor.gradient)
-                    .frame(width: 28, height: 28)
-                    .overlay(
-                        Image(systemName: "folder.fill")
-                            .font(.system(size: 13, weight: .medium))
-                            .foregroundColor(.white)
-                    )
-
                 VStack(alignment: .leading, spacing: 1) {
                     Text(project.name)
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.title3.weight(.semibold))
                     Text(project.path)
-                        .font(.system(size: 10))
-                        .foregroundColor(.secondary)
+                        .font(ScopeTheme.Font.caption)
+                        .foregroundStyle(.tertiary)
                         .lineLimit(1)
                         .truncationMode(.middle)
                 }
@@ -257,8 +187,6 @@ struct GUIPanelView: View {
 
             Spacer()
 
-            BriefingBellView(showDrawer: $showBriefingDrawer)
-            chatButton
             IndexIndicator(
                 isIndexing: contextEngine.isIndexing,
                 indexStatus: contextEngine.indexStatus,
@@ -291,13 +219,8 @@ struct GUIPanelView: View {
             }
         } label: {
             Image(systemName: showChatDrawer ? "bubble.right.fill" : "bubble.right")
-                .font(.system(size: 12, weight: .medium))
+                .font(ScopeTheme.Font.footnoteMedium)
                 .foregroundColor(showChatDrawer ? .accentColor : .secondary)
-                .frame(width: 28, height: 28)
-                .background(
-                    RoundedRectangle(cornerRadius: 6)
-                        .fill(showChatDrawer ? Color.accentColor.opacity(0.12) : Color.clear)
-                )
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -306,52 +229,14 @@ struct GUIPanelView: View {
 
     // MARK: - Tab Bar
 
-    /// Tabs hidden from the tab bar (but code kept for later re-enabling).
-    private static let hiddenTabs: Set<AppState.GUITab> = [.visualize]
-
     private var tabBar: some View {
-        HStack(spacing: 2) {
-            ForEach(AppState.GUITab.allCases.filter { !Self.hiddenTabs.contains($0) }, id: \.self) { tab in
-                TabButton(tab: tab, isSelected: appState.selectedTab == tab) {
-                    withAnimation(.easeInOut(duration: 0.15)) {
-                        appState.selectedTab = tab
-                    }
-                }
+        Picker("", selection: $appState.selectedTab) {
+            ForEach(AppState.GUITab.allCases, id: \.self) { tab in
+                Text(tab.rawValue).tag(tab)
             }
-            Spacer()
         }
-    }
-}
-
-struct TabButton: View {
-    let tab: AppState.GUITab
-    let isSelected: Bool
-    let action: () -> Void
-
-    @State private var isHovering = false
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 5) {
-                Image(systemName: tab.icon)
-                    .font(.system(size: 11, weight: isSelected ? .semibold : .regular))
-                Text(tab.rawValue)
-                    .font(.system(size: 12, weight: isSelected ? .semibold : .regular))
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
-            .background(
-                RoundedRectangle(cornerRadius: 6)
-                    .fill(isSelected
-                          ? Color.accentColor.opacity(0.12)
-                          : isHovering ? Color(nsColor: .separatorColor).opacity(0.15) : Color.clear)
-            )
-            .foregroundColor(isSelected ? .accentColor : .secondary)
-        }
-        .buttonStyle(.plain)
-        .onHover { hovering in
-            isHovering = hovering
-        }
+        .pickerStyle(.segmented)
+        .labelsHidden()
     }
 }
 
@@ -372,26 +257,19 @@ struct MCPIndicator: View {
     }
 
     private var statusColor: Color {
-        isConnectedToCurrentProject ? .green : .orange
+        .green
     }
 
     var body: some View {
         if connections.isEmpty {
-            // No MCP connections — show disconnected state
-            HStack(spacing: 5) {
-                Image(systemName: "antenna.radiowaves.left.and.right.slash")
-                    .font(.system(size: 10))
-                    .foregroundColor(.secondary.opacity(0.5))
+            HStack(spacing: 3) {
+                Circle()
+                    .fill(Color.secondary.opacity(0.3))
+                    .frame(width: 6, height: 6)
                 Text("MCP")
-                    .font(.system(size: 10, weight: .medium))
-                    .foregroundColor(.secondary.opacity(0.5))
+                    .font(ScopeTheme.Font.caption)
+                    .foregroundColor(.secondary.opacity(0.4))
             }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .background(
-                RoundedRectangle(cornerRadius: 5)
-                    .fill(Color(nsColor: .separatorColor).opacity(0.12))
-            )
         } else {
             Menu {
                 Section("MCP Connections (\(connections.count))") {
@@ -405,31 +283,20 @@ struct MCPIndicator: View {
                     }
                 }
             } label: {
-                HStack(spacing: 5) {
-                    Image(systemName: "antenna.radiowaves.left.and.right")
-                        .font(.system(size: 10, weight: .semibold))
-                        .foregroundColor(statusColor)
+                HStack(spacing: 3) {
+                    Circle()
+                        .fill(statusColor)
+                        .frame(width: 6, height: 6)
                     Text("MCP")
-                        .font(.system(size: 10, weight: .semibold))
+                        .font(ScopeTheme.Font.caption)
                         .foregroundColor(statusColor)
                     if connections.count > 1 {
                         Text("\(connections.count)")
-                            .font(.system(size: 9, weight: .bold, design: .monospaced))
-                            .foregroundColor(.white)
-                            .frame(width: 16, height: 16)
-                            .background(Circle().fill(statusColor))
+                            .font(ScopeTheme.Font.tag)
+                            .fontDesign(.monospaced)
+                            .foregroundColor(statusColor)
                     }
                 }
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .background(
-                    RoundedRectangle(cornerRadius: 5)
-                        .fill(statusColor.opacity(0.12))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 5)
-                                .strokeBorder(statusColor.opacity(0.3), lineWidth: 1)
-                        )
-                )
             }
             .menuStyle(.borderlessButton)
             .menuIndicator(.hidden)
@@ -481,10 +348,6 @@ struct IndexIndicator: View {
         }
     }
 
-    private var isActive: Bool {
-        true // Always show as active so the button is clearly interactive
-    }
-
     var body: some View {
         Menu {
             if indexStatus == "no_key" {
@@ -513,18 +376,18 @@ struct IndexIndicator: View {
                 .disabled(isIndexing)
             }
         } label: {
-            HStack(spacing: 5) {
+            HStack(spacing: 3) {
                 if isIndexing {
                     ProgressView()
                         .controlSize(.mini)
                         .scaleEffect(0.6)
                 } else {
-                    Image(systemName: "chevron.left.forwardslash.chevron.right")
-                        .font(.system(size: 10, weight: isActive ? .semibold : .regular))
-                        .foregroundColor(statusColor)
+                    Circle()
+                        .fill(statusColor)
+                        .frame(width: 6, height: 6)
                 }
                 Text(label)
-                    .font(.system(size: 10, weight: isActive ? .semibold : .medium))
+                    .font(ScopeTheme.Font.caption)
                     .foregroundColor(statusColor)
                 if isEmbedding && !isIndexing {
                     ProgressView()
@@ -532,19 +395,6 @@ struct IndexIndicator: View {
                         .scaleEffect(0.5)
                 }
             }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .background(
-                RoundedRectangle(cornerRadius: 5)
-                    .fill(statusColor.opacity(0.12))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 5)
-                            .strokeBorder(
-                                isActive ? statusColor.opacity(0.3) : Color.clear,
-                                lineWidth: 1
-                            )
-                    )
-            )
         }
         .menuStyle(.borderlessButton)
         .menuIndicator(.hidden)
@@ -577,32 +427,19 @@ struct ProfileIndicator: View {
     }
 
     var body: some View {
-        HStack(spacing: 5) {
+        HStack(spacing: 3) {
             if isGenerating {
                 ProgressView()
                     .controlSize(.mini)
                     .scaleEffect(0.6)
             } else {
-                Image(systemName: icon)
-                    .font(.system(size: 10, weight: hasProfile ? .semibold : .regular))
-                    .foregroundColor(statusColor)
+                Circle()
+                    .fill(statusColor)
+                    .frame(width: 6, height: 6)
             }
             Text(label)
-                .font(.system(size: 10, weight: hasProfile || isGenerating ? .semibold : .medium))
+                .font(ScopeTheme.Font.caption)
                 .foregroundColor(statusColor)
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 4)
-        .background(
-            RoundedRectangle(cornerRadius: 5)
-                .fill(statusColor.opacity(0.12))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 5)
-                        .strokeBorder(
-                            hasProfile || isGenerating ? statusColor.opacity(0.3) : Color.clear,
-                            lineWidth: 1
-                        )
-                )
-        )
     }
 }

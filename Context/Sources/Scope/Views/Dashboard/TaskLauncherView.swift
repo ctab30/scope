@@ -15,7 +15,7 @@ struct TaskLauncherView: View {
             // Header
             HStack {
                 Label("Task Launcher", systemImage: "bolt.fill")
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(ScopeTheme.Font.bodySemibold)
                     .foregroundColor(.primary)
 
                 Spacer()
@@ -26,7 +26,7 @@ struct TaskLauncherView: View {
                     }
                 } label: {
                     Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
-                        .font(.system(size: 10, weight: .semibold))
+                        .font(ScopeTheme.Font.caption)
                         .foregroundColor(.secondary)
                         .frame(width: 20, height: 20)
                 }
@@ -47,14 +47,14 @@ struct TaskLauncherView: View {
                 }
 
                 // Custom prompt
-                HStack(spacing: 6) {
+                HStack(spacing: ScopeTheme.Spacing.xs) {
                     Image(systemName: "terminal.fill")
-                        .font(.system(size: 11))
+                        .font(ScopeTheme.Font.footnote)
                         .foregroundColor(.secondary)
 
                     TextField("Custom prompt...", text: $customPrompt)
                         .textFieldStyle(.plain)
-                        .font(.system(size: 12))
+                        .font(ScopeTheme.Font.body)
                         .onSubmit {
                             launchCustom()
                         }
@@ -69,27 +69,12 @@ struct TaskLauncherView: View {
                     .buttonStyle(.plain)
                     .disabled(customPrompt.trimmingCharacters(in: .whitespaces).isEmpty)
                 }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 7)
-                .background(
-                    RoundedRectangle(cornerRadius: 7)
-                        .fill(Color(nsColor: .controlBackgroundColor))
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 7)
-                        .stroke(Color(nsColor: .separatorColor).opacity(0.4), lineWidth: 0.5)
-                )
+                .padding(.horizontal, ScopeTheme.Spacing.md)
+                .padding(.vertical, ScopeTheme.Spacing.sm)
             }
         }
-        .padding(14)
-        .background(
-            RoundedRectangle(cornerRadius: 10)
-                .fill(Color(nsColor: .controlBackgroundColor).opacity(0.5))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 10)
-                .stroke(Color(nsColor: .separatorColor).opacity(0.3), lineWidth: 0.5)
-        )
+        .padding(ScopeTheme.Spacing.lg)
+        .scopeCard()
     }
 
     // MARK: - Actions
@@ -207,18 +192,18 @@ struct TaskPresetButton: View {
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 8) {
+            HStack(spacing: ScopeTheme.Spacing.sm) {
                 Image(systemName: preset.icon)
-                    .font(.system(size: 12, weight: .medium))
+                    .font(ScopeTheme.Font.bodyMedium)
                     .foregroundColor(preset.color)
                     .frame(width: 20)
 
                 VStack(alignment: .leading, spacing: 1) {
                     Text(preset.title)
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(ScopeTheme.Font.footnoteSemibold)
                         .foregroundColor(.primary)
                     Text(preset.description)
-                        .font(.system(size: 9))
+                        .font(ScopeTheme.Font.tag)
                         .foregroundColor(.secondary)
                         .lineLimit(1)
                 }
@@ -227,23 +212,12 @@ struct TaskPresetButton: View {
 
                 Image(systemName: "arrow.up.right")
                     .font(.system(size: 8, weight: .bold))
-                    .foregroundColor(.secondary.opacity(isHovering ? 0.8 : 0.3))
+                    .foregroundColor(.secondary.opacity(isHovering ? 0.6 : 0))
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 8)
-            .background(
-                RoundedRectangle(cornerRadius: 7)
-                    .fill(isHovering
-                          ? preset.color.opacity(0.08)
-                          : Color(nsColor: .controlBackgroundColor).opacity(0.6))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 7)
-                    .stroke(isHovering
-                            ? preset.color.opacity(0.3)
-                            : Color(nsColor: .separatorColor).opacity(0.3),
-                            lineWidth: 0.5)
-            )
+            .padding(.horizontal, ScopeTheme.Spacing.sm)
+            .padding(.vertical, ScopeTheme.Spacing.xs)
+            .background(isHovering ? preset.color.opacity(0.05) : Color.clear)
+            .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
         }
         .buttonStyle(.plain)
         .onHover { hovering in

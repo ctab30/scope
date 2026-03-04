@@ -51,30 +51,30 @@ struct FileBrowserView: View {
     private var treePanel: some View {
         VStack(spacing: 0) {
             // Search bar
-            HStack(spacing: 6) {
+            HStack(spacing: ScopeTheme.Spacing.xs) {
                 Image(systemName: "magnifyingglass")
-                    .font(.system(size: 11))
+                    .font(ScopeTheme.Font.footnote)
                     .foregroundColor(.secondary)
                 TextField("Filter files…", text: $searchText)
                     .textFieldStyle(.plain)
-                    .font(.system(size: 12))
+                    .font(ScopeTheme.Font.footnote)
                 if !searchText.isEmpty {
                     Button {
                         searchText = ""
                     } label: {
                         Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 10))
+                            .font(ScopeTheme.Font.caption)
                             .foregroundColor(.secondary)
                     }
                     .buttonStyle(.plain)
                 }
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 7)
-            .background(Color(nsColor: .controlBackgroundColor))
-            .cornerRadius(6)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 8)
+            .padding(.horizontal, ScopeTheme.Spacing.md)
+            .padding(.vertical, ScopeTheme.Spacing.sm)
+            .background(ScopeTheme.Colors.controlBg)
+            .cornerRadius(ScopeTheme.Radius.small)
+            .padding(.horizontal, ScopeTheme.Spacing.sm)
+            .padding(.vertical, ScopeTheme.Spacing.sm)
 
             Divider()
 
@@ -90,8 +90,8 @@ struct FileBrowserView: View {
                     }
                     .id(treeVersion) // force re-render on tree mutations
                 }
-                .padding(.vertical, 4)
-                .padding(.horizontal, 4)
+                .padding(.vertical, ScopeTheme.Spacing.xxs)
+                .padding(.horizontal, ScopeTheme.Spacing.xxs)
             }
         }
     }
@@ -108,17 +108,17 @@ struct FileBrowserView: View {
                     if let name = currentFileName {
                         HStack {
                             Text(name)
-                                .font(.system(size: 12, weight: .medium, design: .monospaced))
+                                .font(ScopeTheme.Font.mono)
                                 .foregroundColor(.primary)
                             if let lang = currentLanguage {
                                 Text(lang)
-                                    .font(.system(size: 10, weight: .medium))
+                                    .font(ScopeTheme.Font.caption)
                                     .foregroundColor(.secondary)
-                                    .padding(.horizontal, 6)
-                                    .padding(.vertical, 2)
+                                    .padding(.horizontal, ScopeTheme.Spacing.xs)
+                                    .padding(.vertical, ScopeTheme.Spacing.xxxs)
                                     .background(
-                                        RoundedRectangle(cornerRadius: 4)
-                                            .fill(Color(nsColor: .separatorColor).opacity(0.2))
+                                        RoundedRectangle(cornerRadius: ScopeTheme.Radius.small)
+                                            .fill(ScopeTheme.Colors.separator.opacity(ScopeTheme.Opacity.border))
                                     )
                             }
                             Spacer()
@@ -130,7 +130,7 @@ struct FileBrowserView: View {
                                     if showDiff { isEditMode = false }
                                 } label: {
                                     Image(systemName: showDiff ? "arrow.left.arrow.right.circle.fill" : "arrow.left.arrow.right.circle")
-                                        .font(.system(size: 12, weight: .medium))
+                                        .font(ScopeTheme.Font.footnoteMedium)
                                         .foregroundColor(showDiff ? .accentColor : .secondary)
                                 }
                                 .buttonStyle(.plain)
@@ -145,32 +145,32 @@ struct FileBrowserView: View {
                                     if isEditMode { showDiff = false }
                                 } label: {
                                     Image(systemName: isEditMode ? "pencil.circle.fill" : "pencil.circle")
-                                        .font(.system(size: 12, weight: .medium))
+                                        .font(ScopeTheme.Font.footnoteMedium)
                                         .foregroundColor(isEditMode ? .accentColor : .secondary)
                                 }
                                 .buttonStyle(.plain)
                                 .help(isEditMode ? "Switch to Read Mode" : "Switch to Edit Mode")
                             }
                         }
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 8)
+                        .padding(.horizontal, ScopeTheme.Spacing.md)
+                        .padding(.vertical, ScopeTheme.Spacing.sm)
 
                         Divider()
                     }
 
                     if isTruncated {
-                        HStack(spacing: 6) {
+                        HStack(spacing: ScopeTheme.Spacing.xs) {
                             Image(systemName: "exclamationmark.triangle.fill")
-                                .font(.system(size: 11))
+                                .font(ScopeTheme.Font.footnote)
                                 .foregroundColor(.orange)
                             Text("File truncated — showing first portion only")
-                                .font(.system(size: 11))
+                                .font(ScopeTheme.Font.footnote)
                                 .foregroundColor(.orange)
                             Spacer()
                         }
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 6)
-                        .background(Color.orange.opacity(0.08))
+                        .padding(.horizontal, ScopeTheme.Spacing.md)
+                        .padding(.vertical, ScopeTheme.Spacing.xs)
+                        .background(Color.orange.opacity(ScopeTheme.Opacity.hover))
                     }
 
                     if isEditMode {
@@ -208,15 +208,15 @@ struct FileBrowserView: View {
     // MARK: - Empty State
 
     private func emptyState(icon: String, title: String, subtitle: String) -> some View {
-        VStack(spacing: 10) {
+        VStack(spacing: ScopeTheme.Spacing.md) {
             Image(systemName: icon)
                 .font(.system(size: 28))
                 .foregroundStyle(.tertiary)
             Text(title)
-                .font(.system(size: 13, weight: .medium))
+                .font(ScopeTheme.Font.bodyMedium)
                 .foregroundColor(.secondary)
             Text(subtitle)
-                .font(.system(size: 11))
+                .font(ScopeTheme.Font.footnote)
                 .foregroundStyle(.tertiary)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)

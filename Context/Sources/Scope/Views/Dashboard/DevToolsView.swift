@@ -21,15 +21,9 @@ struct DevToolsView: View {
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundColor(.primary)
 
-                // Project type badge
                 Text(devEnv.projectType.rawValue)
                     .font(.system(size: 10, weight: .medium))
                     .foregroundColor(devEnv.projectType.color)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(
-                        Capsule().fill(devEnv.projectType.color.opacity(0.12))
-                    )
 
                 Spacer()
 
@@ -87,15 +81,7 @@ struct DevToolsView: View {
                 }
             }
         }
-        .padding(14)
-        .background(
-            RoundedRectangle(cornerRadius: 10)
-                .fill(Color(nsColor: .controlBackgroundColor).opacity(0.5))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 10)
-                .stroke(Color(nsColor: .separatorColor).opacity(0.3), lineWidth: 0.5)
-        )
+        .padding(ScopeTheme.Spacing.lg)
     }
 
     private func launchCommand(_ cmd: DevCommand) {
@@ -143,21 +129,10 @@ struct DevCommandButton: View {
                     .font(.system(size: 8, weight: .bold))
                     .foregroundColor(.secondary.opacity(isHovering ? 0.8 : 0.3))
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 7)
-            .background(
-                RoundedRectangle(cornerRadius: 7)
-                    .fill(isHovering
-                          ? command.color.opacity(0.08)
-                          : Color(nsColor: .controlBackgroundColor).opacity(0.6))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 7)
-                    .stroke(isHovering
-                            ? command.color.opacity(0.3)
-                            : Color(nsColor: .separatorColor).opacity(0.3),
-                            lineWidth: 0.5)
-            )
+            .padding(.horizontal, ScopeTheme.Spacing.sm)
+            .padding(.vertical, ScopeTheme.Spacing.xs)
+            .background(isHovering ? command.color.opacity(0.05) : Color.clear)
+            .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
         }
         .buttonStyle(.plain)
         .onHover { hovering in
@@ -201,25 +176,11 @@ struct PortRow: View {
                         .font(.system(size: 9, weight: .medium))
                 }
                 .foregroundColor(isHovering ? .accentColor : .secondary)
-                .padding(.horizontal, 6)
-                .padding(.vertical, 3)
-                .background(
-                    RoundedRectangle(cornerRadius: 4)
-                        .fill(Color(nsColor: .controlBackgroundColor).opacity(isHovering ? 1 : 0.5))
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 4)
-                        .stroke(Color(nsColor: .separatorColor).opacity(0.3), lineWidth: 0.5)
-                )
             }
             .buttonStyle(.plain)
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 5)
-        .background(
-            RoundedRectangle(cornerRadius: 6)
-                .fill(Color(nsColor: .controlBackgroundColor).opacity(0.4))
-        )
+        .padding(.horizontal, ScopeTheme.Spacing.sm)
+        .padding(.vertical, ScopeTheme.Spacing.xs)
         .onHover { hovering in
             isHovering = hovering
         }
