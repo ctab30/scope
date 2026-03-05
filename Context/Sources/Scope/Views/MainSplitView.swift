@@ -138,8 +138,8 @@ struct TransparentWindowSetter: NSViewRepresentable {
 
         func observeFullScreen(window: NSWindow) {
             let nc = NotificationCenter.default
-            // Entering fullscreen: restore normal titlebar
-            let enterObs = nc.addObserver(
+            // Entering fullscreen: restore normal titlebar before animation
+            let willEnter = nc.addObserver(
                 forName: NSWindow.willEnterFullScreenNotification,
                 object: window, queue: .main
             ) { notification in
@@ -147,21 +147,23 @@ struct TransparentWindowSetter: NSViewRepresentable {
                 w.titlebarAppearsTransparent = false
                 w.titlebarSeparatorStyle = .automatic
             }
-            // Exiting fullscreen: re-apply transparency after animation
-            let exitObs = nc.addObserver(
+            // Before exit animation: set transparent early so animation is clean
+            let willExit = nc.addObserver(
+                forName: NSWindow.willExitFullScreenNotification,
+                object: window, queue: .main
+            ) { notification in
+                guard let w = notification.object as? NSWindow else { return }
+                TransparentWindowSetter.makeTransparent(w)
+            }
+            // After exit animation: safety re-apply in case macOS overrode during animation
+            let didExit = nc.addObserver(
                 forName: NSWindow.didExitFullScreenNotification,
                 object: window, queue: .main
             ) { notification in
                 guard let w = notification.object as? NSWindow else { return }
                 TransparentWindowSetter.makeTransparent(w)
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-                    TransparentWindowSetter.makeTransparent(w)
-                }
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-                    TransparentWindowSetter.makeTransparent(w)
-                }
             }
-            observers = [enterObs, exitObs]
+            observers = [willEnter, willExit, didExit]
         }
 
         deinit {
