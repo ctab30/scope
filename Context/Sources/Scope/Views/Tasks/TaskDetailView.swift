@@ -355,13 +355,6 @@ struct TaskDetailView: View {
                         }
                     }
 
-                    // Launch as Claude session
-                    Button {
-                        launchAsSession()
-                    } label: {
-                        Label("Launch as Claude Session", systemImage: "play.fill")
-                    }
-                    .buttonStyle(.borderedProminent)
                 }
                 .padding(ScopeTheme.Spacing.xl)
             }
@@ -441,33 +434,6 @@ struct TaskDetailView: View {
         }
     }
 
-    private func launchAsSession() {
-        var prompt = title
-        if let desc = task.description, !desc.isEmpty {
-            prompt += "\n\n" + desc
-        }
-
-        // Include image attachment references
-        if !attachedImages.isEmpty {
-            prompt += "\n\nAttached images:"
-            for path in attachedImages {
-                prompt += "\n- \(path)"
-            }
-        }
-
-        let escaped = prompt.replacingOccurrences(of: "\"", with: "\\\"")
-
-        NotificationCenter.default.post(
-            name: .launchTask,
-            object: nil,
-            userInfo: [
-                LaunchTaskKey.title: "Task: \(title)",
-                LaunchTaskKey.command: "claude \"\(escaped)\"",
-                LaunchTaskKey.projectId: appState.currentProject?.id ?? ""
-            ]
-        )
-        dismiss()
-    }
 
     private func enrichWithAI() {
         enrichError = nil

@@ -1556,7 +1556,27 @@ class MCPServer {
             try task.update(db)
         }
 
+        // Track active task per MCP session for hook-based needs_attention
+        trackActiveTask(taskId: Int64(taskId), status: task.status)
+
         return "Updated task #\(taskId): \(changes.joined(separator: ", "))"
+    }
+
+    /// Writes the active task ID for this project so the Claude Code hook knows which task to move.
+    private func trackActiveTask(taskId: Int64, status: String?) {
+        guard let projectId = detectedProjectId else { return }
+        let dir = FileManager.default.urls(
+            for: .applicationSupportDirectory,
+            in: .userDomainMask
+        ).first!.appendingPathComponent("Scope/active-tasks", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let file = dir.appendingPathComponent(projectId)
+
+        if status == "in_progress" {
+            try? "\(taskId)".write(to: file, atomically: true, encoding: .utf8)
+        } else {
+            try? FileManager.default.removeItem(at: file)
+        }
     }
 
     func addTaskNote(_ args: [String: Any]) throws -> String {
@@ -2981,7 +3001,49 @@ extension JSONDecoder {
     }()
 }
 
+// MARK: - Notification Subcommand
+
+/// Writes a notification request file that the main Workspace app picks up and displays.
+/// Usage: ScopeMCP notify --title "Title" --body "Body" [--subtitle "Sub"]
+func handleNotifyCommand(_ args: [String]) {
+    var title = "Workspace"
+    var body = ""
+    var subtitle = ""
+
+    var i = 0
+    while i < args.count {
+        switch args[i] {
+        case "--title" where i + 1 < args.count:
+            i += 1; title = args[i]
+        case "--body" where i + 1 < args.count:
+            i += 1; body = args[i]
+        case "--subtitle" where i + 1 < args.count:
+            i += 1; subtitle = args[i]
+        default: break
+        }
+        i += 1
+    }
+
+    let notifyDir = FileManager.default.urls(
+        for: .applicationSupportDirectory,
+        in: .userDomainMask
+    ).first!.appendingPathComponent("Scope/notifications", isDirectory: true)
+    try? FileManager.default.createDirectory(at: notifyDir, withIntermediateDirectories: true)
+
+    let payload: [String: String] = ["title": title, "body": body, "subtitle": subtitle]
+    let file = notifyDir.appendingPathComponent("\(UUID().uuidString).json")
+    if let data = try? JSONSerialization.data(withJSONObject: payload) {
+        try? data.write(to: file, options: .atomic)
+    }
+}
+
 // MARK: - Entry Point
+
+let args = CommandLine.arguments
+if args.count >= 2 && args[1] == "notify" {
+    handleNotifyCommand(Array(args.dropFirst(2)))
+    exit(0)
+}
 
 do {
     let db = try openDatabase()

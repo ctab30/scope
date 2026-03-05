@@ -1,7 +1,6 @@
 import SwiftUI
 import SwiftTerm
 import AppKit
-import UserNotifications
 
 /// Tracks all active terminal views so they can be terminated on app quit.
 final class TerminalTracker {
@@ -192,6 +191,7 @@ struct ScopeApp: App {
                     contextEngine.startPollingForRequests()
                     notificationService.observeClaudeExitNotifications()
                     notificationService.observeNeedsAttentionNotifications()
+                    notificationService.observeHookNotifications()
                     // Show onboarding wizard on first launch
                     if !UserDefaults.standard.bool(forKey: "hasCompletedOnboarding") {
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
@@ -296,17 +296,17 @@ struct ScopeApp: App {
 
     // MARK: - Deep Link Handling
 
-    /// Handle scope:// deep links.
+    /// Handle workspace:// deep links.
     private func handleDeepLink(_ url: URL) {
-        guard url.scheme == "scope" else { return }
+        guard url.scheme == "workspace" else { return }
 
-        // scope://needs-attention?project=<id>&titles=<titles>
+        // workspace://needs-attention?project=<id>&titles=<titles>
         if url.host == "needs-attention" {
             handleNeedsAttentionLink(url)
             return
         }
 
-        // scope://install-mcp?client=claude
+        // workspace://install-mcp?client=claude
         guard url.host == "install-mcp",
               let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
               let clientParam = components.queryItems?.first(where: { $0.name == "client" })?.value,
@@ -347,24 +347,23 @@ struct ScopeApp: App {
         showDeepLinkSheet = true
     }
 
-    /// Handle scope://needs-attention?project=<id>&titles=<titles>
+    /// Handle workspace://needs-attention?project=<id>&titles=<titles>
     /// Sends a native macOS notification with Scope's app icon.
     private func handleNeedsAttentionLink(_ url: URL) {
         guard let components = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return }
         let titles = components.queryItems?.first(where: { $0.name == "titles" })?.value ?? "Tasks need your attention"
         let projectId = components.queryItems?.first(where: { $0.name == "project" })?.value
 
-        let content = UNMutableNotificationContent()
-        content.title = "Needs Attention"
-        content.body = titles
-        content.sound = .default
+        print("handleNeedsAttentionLink: titles=\(titles) project=\(projectId ?? "nil")")
 
-        let request = UNNotificationRequest(
-            identifier: "needsAttention-\(UUID().uuidString)",
-            content: content,
-            trigger: nil
-        )
-        UNUserNotificationCenter.current().add(request)
+        let escapedTitles = titles.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"")
+        let script = "display notification \"\(escapedTitles)\" with title \"Needs Attention\""
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
+        process.arguments = ["-e", script]
+        process.standardOutput = FileHandle.nullDevice
+        process.standardError = FileHandle.nullDevice
+        try? process.run()
 
         // Also post internal notification to refresh views
         NotificationCenter.default.post(name: .tasksDidChange, object: nil)

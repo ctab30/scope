@@ -108,10 +108,10 @@ cat > "$APP_BUNDLE/Contents/Info.plist" << PLIST
         <dict>
             <key>CFBundleURLSchemes</key>
             <array>
-                <string>scope</string>
+                <string>workspace</string>
             </array>
             <key>CFBundleURLName</key>
-            <string>com.scope.oauth</string>
+            <string>com.scope.deeplink</string>
         </dict>
     </array>
     <key>LSUIElement</key>
@@ -125,10 +125,31 @@ PLIST
 # Write PkgInfo
 echo -n "APPL????" > "$APP_BUNDLE/Contents/PkgInfo"
 
-# Step 5: Ad-hoc codesign
+# Step 5: Codesign with Developer ID (required for notifications)
 echo "[5/5] Codesigning..."
-codesign --force --deep --sign - "$APP_BUNDLE" 2>&1
-echo "  Signed (ad-hoc)"
+# Write entitlements for notifications and network
+ENTITLEMENTS="$BUILD_DIR/entitlements.plist"
+cat > "$ENTITLEMENTS" << 'ENTPLIST'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>com.apple.security.app-sandbox</key>
+    <false/>
+</dict>
+</plist>
+ENTPLIST
+
+# Prefer Apple Development identity; fall back to ad-hoc
+SIGN_IDENTITY=$(security find-identity -v -p codesigning 2>/dev/null | grep "Apple Development" | head -1 | sed 's/.*"\(.*\)"/\1/' || echo "")
+if [ -n "$SIGN_IDENTITY" ]; then
+    codesign --force --deep --sign "$SIGN_IDENTITY" --entitlements "$ENTITLEMENTS" "$APP_BUNDLE" 2>&1
+    echo "  Signed with: $SIGN_IDENTITY"
+else
+    codesign --force --deep --sign - "$APP_BUNDLE" 2>&1
+    echo "  Signed (ad-hoc) — notifications may not work"
+fi
+rm -f "$ENTITLEMENTS"
 
 # Create .zip for distribution
 echo "Creating .zip archive..."

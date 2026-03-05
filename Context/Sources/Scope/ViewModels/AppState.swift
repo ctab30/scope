@@ -49,6 +49,11 @@ class AppState: ObservableObject {
             print("Failed to load projects: \(error)")
         }
         loadClients()
+
+        // Install Claude Code hooks for all projects
+        for project in projects {
+            installClaudeHooks(for: project)
+        }
     }
 
     func selectProject(_ project: Project) {
@@ -69,8 +74,112 @@ class AppState: ObservableObject {
             print("Failed to update project: \(error)")
         }
 
+        // Install Claude Code hooks for needs_attention
+        installClaudeHooks(for: project)
+
         // Generate project profile asynchronously
         generateProjectProfile(for: project)
+    }
+
+    /// Writes hooks to the project's `.claude/settings.local.json` so every Claude session
+    /// in that directory automatically moves in_progress tasks to needs_attention on Stop/Notification.
+    private func installClaudeHooks(for project: Project) {
+        let projectURL = URL(fileURLWithPath: project.path)
+        let claudeDir = projectURL.appendingPathComponent(".claude", isDirectory: true)
+        let settingsLocalPath = claudeDir.appendingPathComponent("settings.local.json")
+
+        // Ensure .claude/ directory exists
+        try? FileManager.default.createDirectory(at: claudeDir, withIntermediateDirectories: true)
+
+        // Write the project-level hook script to ~/.scope/hooks/
+        let homeDir = FileManager.default.homeDirectoryForCurrentUser
+        let hooksDir = homeDir.appendingPathComponent(".scope/hooks", isDirectory: true)
+        try? FileManager.default.createDirectory(at: hooksDir, withIntermediateDirectories: true)
+
+        let appSupportPath = FileManager.default.urls(
+            for: .applicationSupportDirectory,
+            in: .userDomainMask
+        ).first!.appendingPathComponent("Scope").path
+        let dbPath = appSupportPath + "/scope.db"
+        let activeTasksDir = appSupportPath + "/active-tasks"
+
+        // Find ScopeMCP binary path (sibling to main app binary)
+        let mcpBinaryPath = Bundle.main.bundlePath + "/Contents/MacOS/ScopeMCP"
+
+        let scriptPath = hooksDir.appendingPathComponent("needs-attention-\(project.id).sh")
+        let projectName = project.name.replacingOccurrences(of: "'", with: "'\\''")
+        // The MCP server writes active-tasks/<project-id> with the task ID when update_task
+        // moves a task to in_progress. The hook reads that file to move only that specific task.
+        let script = """
+        #!/bin/bash
+        DB='\(dbPath)'
+        PROJECT='\(project.id)'
+        TASK_FILE='\(activeTasksDir)/\(project.id)'
+
+        [ ! -f "$TASK_FILE" ] && exit 0
+        TASK_ID=$(cat "$TASK_FILE" 2>/dev/null)
+        [ -z "$TASK_ID" ] && exit 0
+
+        TITLE=$(/usr/bin/sqlite3 "$DB" "SELECT title FROM taskItems WHERE id = $TASK_ID AND status = 'in_progress' LIMIT 1;" 2>/dev/null)
+        [ -z "$TITLE" ] && exit 0
+
+        /usr/bin/sqlite3 "$DB" "UPDATE taskItems SET status = 'needs_attention' WHERE id = $TASK_ID AND status = 'in_progress';"
+        '\(mcpBinaryPath)' notify --title "Needs Attention" --subtitle '\(projectName)' --body "$TITLE"
+        """
+        try? script.write(to: scriptPath, atomically: true, encoding: .utf8)
+        try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: scriptPath.path)
+
+        // Resume script — moves task back to in_progress when user responds
+        let resumeScriptPath = hooksDir.appendingPathComponent("resume-\(project.id).sh")
+        let resumeScript = """
+        #!/bin/bash
+        DB='\(dbPath)'
+        TASK_FILE='\(activeTasksDir)/\(project.id)'
+
+        [ ! -f "$TASK_FILE" ] && exit 0
+        TASK_ID=$(cat "$TASK_FILE" 2>/dev/null)
+        [ -z "$TASK_ID" ] && exit 0
+
+        /usr/bin/sqlite3 "$DB" "UPDATE taskItems SET status = 'in_progress' WHERE id = $TASK_ID AND status = 'needs_attention';"
+        """
+        try? resumeScript.write(to: resumeScriptPath, atomically: true, encoding: .utf8)
+        try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: resumeScriptPath.path)
+
+        // Read existing settings.local.json to preserve other settings
+        var settings: [String: Any] = [:]
+        if let data = try? Data(contentsOf: settingsLocalPath),
+           let existing = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+            settings = existing
+        }
+
+        // Notification/Stop → move task to needs_attention
+        let needsAttentionHook: [[String: Any]] = [
+            [
+                "matcher": "",
+                "hooks": [
+                    ["type": "command", "command": scriptPath.path, "timeout": 10]
+                ]
+            ]
+        ]
+        // UserPromptSubmit → move task back to in_progress
+        let resumeHook: [[String: Any]] = [
+            [
+                "matcher": "",
+                "hooks": [
+                    ["type": "command", "command": resumeScriptPath.path, "timeout": 10]
+                ]
+            ]
+        ]
+        settings["hooks"] = [
+            "Notification": needsAttentionHook,
+            "Stop": needsAttentionHook,
+            "UserPromptSubmit": resumeHook
+        ]
+
+        // Write back
+        if let jsonData = try? JSONSerialization.data(withJSONObject: settings, options: [.prettyPrinted, .sortedKeys]) {
+            try? jsonData.write(to: settingsLocalPath, options: .atomic)
+        }
     }
 
     private func generateProjectProfile(for project: Project) {

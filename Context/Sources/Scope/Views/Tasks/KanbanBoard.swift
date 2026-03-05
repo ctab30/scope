@@ -5,8 +5,10 @@ import UniformTypeIdentifiers
 struct KanbanBoard: View {
     var globalMode: Bool = false
     @EnvironmentObject var appState: AppState
+    @Environment(\.openWindow) private var openWindow
     @State private var todoTasks: [TaskItem] = []
     @State private var inProgressTasks: [TaskItem] = []
+    @State private var needsAttentionTasks: [TaskItem] = []
     @State private var doneTasks: [TaskItem] = []
     @State private var showingNewTask = false
     @State private var selectedTask: TaskItem?
@@ -22,7 +24,7 @@ struct KanbanBoard: View {
 
                 // Task counts
                 HStack(spacing: ScopeTheme.Spacing.sm) {
-                    Label("\(todoTasks.count + inProgressTasks.count) open", systemImage: "circle.dotted")
+                    Label("\(todoTasks.count + inProgressTasks.count + needsAttentionTasks.count) open", systemImage: "circle.dotted")
                     Label("\(doneTasks.count) done", systemImage: "checkmark.circle")
                 }
                 .font(ScopeTheme.Font.caption)
@@ -54,7 +56,6 @@ struct KanbanBoard: View {
                     onProjectBadgeTap: globalMode ? { navigateToProject($0) } : nil,
                     contextMenuItems: { task in
                         Button("Move to In Progress") { moveTask(task, to: "in_progress") }
-                        Button("Launch as Claude Session") { launchTask(task) }
                         Divider()
                         Button("Delete", role: .destructive) { deleteTask(task) }
                     }
@@ -73,7 +74,28 @@ struct KanbanBoard: View {
                     contextMenuItems: { task in
                         Button("Move to Done") { moveTask(task, to: "done") }
                         Button("Move back to Todo") { moveTask(task, to: "todo") }
-                        Button("Launch as Claude Session") { launchTask(task) }
+                        Divider()
+                        Button("Delete", role: .destructive) { deleteTask(task) }
+                    }
+                )
+                Divider()
+                KanbanColumn(
+                    title: "Needs Attention",
+                    icon: "exclamationmark.circle.fill",
+                    color: .red,
+                    status: "needs_attention",
+                    tasks: needsAttentionTasks,
+                    onTapTask: { openDetail($0) },
+                    onDropTask: { taskId in moveTaskById(taskId, to: "needs_attention") },
+                    projectLookup: globalMode ? projectLookup : [:],
+                    onProjectBadgeTap: globalMode ? { navigateToProject($0) } : nil,
+                    contextMenuItems: { task in
+                        if globalMode {
+                            Button("Open Project") { openWindow(value: task.projectId) }
+                            Divider()
+                        }
+                        Button("Move to In Progress") { moveTask(task, to: "in_progress") }
+                        Button("Move to Todo") { moveTask(task, to: "todo") }
                         Divider()
                         Button("Delete", role: .destructive) { deleteTask(task) }
                     }
@@ -147,13 +169,12 @@ struct KanbanBoard: View {
             if globalMode {
                 allTasks = try DatabaseService.shared.dbQueue.read { db in
                     try TaskItem
-                        .filter(Column("isGlobal") == true)
                         .order(Column("priority").desc, Column("createdAt").desc)
                         .fetchAll(db)
                 }
             } else {
                 guard let project = appState.currentProject else {
-                    todoTasks = []; inProgressTasks = []; doneTasks = []
+                    todoTasks = []; inProgressTasks = []; needsAttentionTasks = []; doneTasks = []
                     return
                 }
                 allTasks = try DatabaseService.shared.dbQueue.read { db in
@@ -165,6 +186,7 @@ struct KanbanBoard: View {
             }
             todoTasks = allTasks.filter { $0.status == "todo" }
             inProgressTasks = allTasks.filter { $0.status == "in_progress" }
+            needsAttentionTasks = allTasks.filter { $0.status == "needs_attention" }
             doneTasks = allTasks.filter { $0.status == "done" }
         } catch {
             print("KanbanBoard: failed to load tasks: \(error)")
@@ -183,7 +205,7 @@ struct KanbanBoard: View {
     }
 
     private func moveTaskById(_ taskId: Int64, to newStatus: String) {
-        let allTasks = todoTasks + inProgressTasks + doneTasks
+        let allTasks = todoTasks + inProgressTasks + needsAttentionTasks + doneTasks
         guard let task = allTasks.first(where: { $0.id == taskId }) else { return }
         moveTask(task, to: newStatus)
     }
@@ -228,29 +250,6 @@ struct KanbanBoard: View {
         }
     }
 
-    private func launchTask(_ task: TaskItem) {
-        var prompt = task.title
-        if let desc = task.description, !desc.isEmpty {
-            prompt += "\n\n" + desc
-        }
-        let images = task.attachmentsArray
-        if !images.isEmpty {
-            prompt += "\n\nAttached images:"
-            for path in images {
-                prompt += "\n- \(path)"
-            }
-        }
-        let escaped = prompt.replacingOccurrences(of: "\"", with: "\\\"")
-        NotificationCenter.default.post(
-            name: .launchTask,
-            object: nil,
-            userInfo: [
-                LaunchTaskKey.title: "Task: \(task.title)",
-                LaunchTaskKey.command: "claude \"\(escaped)\"",
-                LaunchTaskKey.projectId: appState.currentProject?.id ?? ""
-            ]
-        )
-    }
 }
 
 // MARK: - Kanban Column (with drop target)
