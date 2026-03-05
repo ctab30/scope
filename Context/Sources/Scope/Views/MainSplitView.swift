@@ -74,6 +74,8 @@ final class SeamlessSplitVC<L: View, C: View, T: View>: NSViewController, NSSpli
 
     required init?(coder: NSCoder) { fatalError() }
 
+    private var fullScreenObserver: NSObjectProtocol?
+
     override func loadView() {
         let splitView = ClearDividerSplitView()
         splitView.isVertical = true
@@ -88,11 +90,51 @@ final class SeamlessSplitVC<L: View, C: View, T: View>: NSViewController, NSSpli
             host.autoresizingMask = [.width, .height]
         }
 
+        // Prevent system backdrop injection in the sidebar pane
+        leadingHost.wantsLayer = true
+        leadingHost.layer?.backgroundColor = NSColor.clear.cgColor
+
         splitView.addSubview(leadingHost)
         splitView.addSubview(centerHost)
         splitView.addSubview(trailingHost)
 
         self.view = splitView
+
+        // Strip system-injected backdrop views when entering fullscreen
+        fullScreenObserver = NotificationCenter.default.addObserver(
+            forName: NSWindow.didEnterFullScreenNotification,
+            object: nil, queue: .main
+        ) { [weak splitView] _ in
+            guard let splitView else { return }
+            // Small delay to catch views injected during the transition
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                Self.stripBackdropViews(in: splitView)
+            }
+        }
+    }
+
+    /// Recursively hides system-injected BackdropView and _NSScrollViewContentBackgroundView
+    /// that macOS adds to ScrollViews, which go opaque-dark in fullscreen.
+    private static func stripBackdropViews(in view: NSView) {
+        let typeName = String(describing: type(of: view))
+        if typeName.contains("BackdropView") || typeName.contains("_NSScrollViewContentBackgroundView") {
+            view.isHidden = true
+            view.alphaValue = 0
+        }
+        // Also disable background drawing on any NSScrollView / NSClipView
+        if let scrollView = view as? NSScrollView {
+            scrollView.drawsBackground = false
+            scrollView.contentView.drawsBackground = false
+        }
+        for subview in view.subviews {
+            stripBackdropViews(in: subview)
+        }
+    }
+
+    deinit {
+        if let obs = fullScreenObserver {
+            NotificationCenter.default.removeObserver(obs)
+        }
     }
 
     override func viewDidLayout() {
@@ -194,12 +236,24 @@ final class SeamlessSplitVC2<L: View, T: View>: NSViewController, NSSplitViewDel
 // MARK: - Window Configurator
 
 /// Configures the hosting NSWindow for a seamless title-bar appearance.
+/// Handles fullscreen background: sets a rich dark color for the material to blur
+/// (in windowed mode, `.clear` lets the material blur the desktop wallpaper).
 struct WindowConfigurator: NSViewRepresentable {
     var title: String? = nil
 
     typealias NSViewType = NSView
 
-    func makeNSView(context: NSViewRepresentableContext<WindowConfigurator>) -> NSView {
+    /// Dark blue-gray that `.ultraThinMaterial` blurs in fullscreen,
+    /// giving the glass look even without a desktop wallpaper behind it.
+    private static let fullScreenBg = NSColor(
+        red: 0.10, green: 0.14, blue: 0.22, alpha: 1.0
+    )
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator()
+    }
+
+    func makeNSView(context: Context) -> NSView {
         let view = NSView()
         DispatchQueue.main.async {
             guard let window = view.window else { return }
@@ -216,14 +270,44 @@ struct WindowConfigurator: NSViewRepresentable {
             if let title {
                 window.title = title
             }
+            context.coordinator.observeFullScreen(window: window)
         }
         return view
     }
 
-    func updateNSView(_ nsView: NSView, context: NSViewRepresentableContext<WindowConfigurator>) {
+    func updateNSView(_ nsView: NSView, context: Context) {
         DispatchQueue.main.async {
             if let title, let window = nsView.window {
                 window.title = title
+            }
+        }
+    }
+
+    final class Coordinator: NSObject {
+        private var observers: [NSObjectProtocol] = []
+
+        func observeFullScreen(window: NSWindow) {
+            let nc = NotificationCenter.default
+            let enterObs = nc.addObserver(
+                forName: NSWindow.didEnterFullScreenNotification,
+                object: window, queue: .main
+            ) { notification in
+                guard let w = notification.object as? NSWindow else { return }
+                w.backgroundColor = WindowConfigurator.fullScreenBg
+            }
+            let exitObs = nc.addObserver(
+                forName: NSWindow.didExitFullScreenNotification,
+                object: window, queue: .main
+            ) { notification in
+                guard let w = notification.object as? NSWindow else { return }
+                w.backgroundColor = .clear
+            }
+            observers = [enterObs, exitObs]
+        }
+
+        deinit {
+            for obs in observers {
+                NotificationCenter.default.removeObserver(obs)
             }
         }
     }

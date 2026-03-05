@@ -86,6 +86,7 @@ struct ProjectSidebarView: View {
                 .padding(.horizontal, ScopeTheme.Spacing.xs)
                 .padding(.vertical, ScopeTheme.Spacing.xxs)
             }
+            .scrollContentBackground(.hidden)
 
             Divider()
 
