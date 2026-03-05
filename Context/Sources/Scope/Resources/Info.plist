@@ -7,7 +7,9 @@
     <key>CFBundleIdentifier</key>
     <string>com.scope.app</string>
     <key>CFBundleName</key>
-    <string>Scope</string>
+    <string>Workspace</string>
+    <key>CFBundleIconFile</key>
+    <string>AppIcon</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleURLTypes</key>

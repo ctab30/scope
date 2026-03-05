@@ -278,6 +278,7 @@ struct KanbanColumn<MenuContent: View>: View {
                     .clipShape(RoundedRectangle(cornerRadius: 1.5))
                 Text(title)
                     .font(ScopeTheme.Font.footnoteSemibold)
+                    .lineLimit(1)
                 Spacer()
                 Text("\(tasks.count)")
                     .font(ScopeTheme.Font.caption)

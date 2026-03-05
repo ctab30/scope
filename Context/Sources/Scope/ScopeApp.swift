@@ -76,6 +76,18 @@ struct ScopeApp: App {
         // so keyboard events go to whatever app was previously active.
         NSApplication.shared.setActivationPolicy(.regular)
 
+        // Set the app icon — works for both .app bundles and bare SPM executables.
+        // For bare executables, also set the dock tile content view to bypass
+        // the generic square frame macOS wraps around non-bundled executables.
+        if let iconURL = Bundle.module.url(forResource: "AppIcon", withExtension: "icns"),
+           let icon = NSImage(contentsOf: iconURL) {
+            NSApplication.shared.applicationIconImage = icon
+            // Set dock tile directly to avoid generic executable frame
+            let imageView = NSImageView(image: icon)
+            NSApplication.shared.dockTile.contentView = imageView
+            NSApplication.shared.dockTile.display()
+        }
+
         // Migrate data from old "Context" paths before any DB/service init
         Self.migrateFromContext()
 

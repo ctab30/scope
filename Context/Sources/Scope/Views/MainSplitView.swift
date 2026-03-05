@@ -9,9 +9,12 @@ struct MainSplitView: View {
     var body: some View {
         NavigationSplitView(columnVisibility: $sidebarVisibility) {
             ProjectSidebarView()
+                .navigationSplitViewColumnWidth(min: 180, ideal: 200, max: 260)
+                .navigationTitle("Workspace")
         } detail: {
             SeamlessSplitView2 {
                 TerminalTabView(projectPath: $projectPath, projectId: appState.currentProject?.id ?? "")
+                    .padding(.leading, 12)
             } trailing: {
                 GUIPanelView()
             }
@@ -95,15 +98,18 @@ final class SeamlessSplitVC2<L: View, T: View>: NSViewController, NSSplitViewDel
               let splitView = view as? NSSplitView,
               splitView.frame.width > 100 else { return }
         didSetInitialPositions = true
+        // Start balanced — roughly equal split
         splitView.setPosition(splitView.frame.width / 2, ofDividerAt: 0)
     }
 
     func splitView(_ splitView: NSSplitView, constrainMinCoordinate proposedMinimumPosition: CGFloat, ofSubviewAt dividerIndex: Int) -> CGFloat {
-        return 450
+        // Panel can't grow beyond 50/50 — divider stays at or right of center
+        return splitView.frame.width / 2
     }
 
     func splitView(_ splitView: NSSplitView, constrainMaxCoordinate proposedMaximumPosition: CGFloat, ofSubviewAt dividerIndex: Int) -> CGFloat {
-        return splitView.frame.width - 450
+        // Panel min width 550
+        return splitView.frame.width - 550
     }
 }
 
@@ -119,7 +125,9 @@ struct TransparentWindowSetter: NSViewRepresentable {
         DispatchQueue.main.async {
             guard let window = view.window else { return }
             Self.makeTransparent(window)
+            window.title = "Workspace"
             context.coordinator.observeFullScreen(window: window)
+            context.coordinator.keepTitle(window: window, title: "Workspace")
         }
         return view
     }
@@ -135,6 +143,17 @@ struct TransparentWindowSetter: NSViewRepresentable {
 
     final class Coordinator: NSObject {
         private var observers: [NSObjectProtocol] = []
+
+        private var titleObservation: NSKeyValueObservation?
+
+        /// KVO on window.title — reset to "Workspace" whenever SwiftUI changes it
+        func keepTitle(window: NSWindow, title: String) {
+            titleObservation = window.observe(\.title, options: [.new]) { w, change in
+                if let newTitle = change.newValue, newTitle != title {
+                    DispatchQueue.main.async { w.title = title }
+                }
+            }
+        }
 
         func observeFullScreen(window: NSWindow) {
             let nc = NotificationCenter.default
