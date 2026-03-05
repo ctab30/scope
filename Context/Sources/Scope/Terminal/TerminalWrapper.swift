@@ -230,6 +230,7 @@ struct TerminalWrapper: NSViewRepresentable {
     func makeNSView(context: NSViewRepresentableContext<TerminalWrapper>) -> FocusableTerminalView {
         let terminal = FocusableTerminalView(frame: .zero)
         terminal.font = NSFont.monospacedSystemFont(ofSize: 13, weight: .regular)
+        terminal.nativeForegroundColor = .white
 
         terminal.processDelegate = context.coordinator
         context.coordinator.terminalView = terminal

@@ -4,18 +4,21 @@ import AppKit
 struct MainSplitView: View {
     @EnvironmentObject var appState: AppState
     @State private var projectPath: String = ""
+    @State private var sidebarVisibility: NavigationSplitViewVisibility = .automatic
 
     var body: some View {
-        SeamlessSplitView {
+        NavigationSplitView(columnVisibility: $sidebarVisibility) {
             ProjectSidebarView()
-        } center: {
-            TerminalTabView(projectPath: $projectPath, projectId: appState.currentProject?.id ?? "")
-        } trailing: {
-            GUIPanelView()
+        } detail: {
+            SeamlessSplitView2 {
+                TerminalTabView(projectPath: $projectPath, projectId: appState.currentProject?.id ?? "")
+            } trailing: {
+                GUIPanelView()
+            }
+            .background(.ultraThinMaterial)
+            .ignoresSafeArea()
         }
-        .background(.ultraThinMaterial)
-        .ignoresSafeArea()
-        .background(WindowConfigurator())
+        .background(TransparentWindowSetter())
         .onChange(of: appState.currentProject) { _, project in
             if let project = project {
                 projectPath = project.path
@@ -30,136 +33,7 @@ final class ClearDividerSplitView: NSSplitView {
     override var dividerThickness: CGFloat { 1 }
     override var dividerColor: NSColor { .clear }
 
-    override func drawDivider(in rect: NSRect) {
-        // Draw nothing — completely invisible dividers
-    }
-}
-
-// MARK: - 3-Pane Seamless Split View
-
-struct SeamlessSplitView<Leading: View, Center: View, Trailing: View>: NSViewControllerRepresentable {
-    let leading: Leading
-    let center: Center
-    let trailing: Trailing
-
-    init(
-        @ViewBuilder leading: () -> Leading,
-        @ViewBuilder center: () -> Center,
-        @ViewBuilder trailing: () -> Trailing
-    ) {
-        self.leading = leading()
-        self.center = center()
-        self.trailing = trailing()
-    }
-
-    func makeNSViewController(context: Context) -> SeamlessSplitVC<Leading, Center, Trailing> {
-        SeamlessSplitVC(leading: leading, center: center, trailing: trailing)
-    }
-
-    func updateNSViewController(_ controller: SeamlessSplitVC<Leading, Center, Trailing>, context: Context) {}
-}
-
-final class SeamlessSplitVC<L: View, C: View, T: View>: NSViewController, NSSplitViewDelegate {
-    private let leadingContent: L
-    private let centerContent: C
-    private let trailingContent: T
-    private var didSetInitialPositions = false
-
-    init(leading: L, center: C, trailing: T) {
-        self.leadingContent = leading
-        self.centerContent = center
-        self.trailingContent = trailing
-        super.init(nibName: nil, bundle: nil)
-    }
-
-    required init?(coder: NSCoder) { fatalError() }
-
-    private var fullScreenObserver: NSObjectProtocol?
-
-    override func loadView() {
-        let splitView = ClearDividerSplitView()
-        splitView.isVertical = true
-        splitView.delegate = self
-
-        let leadingHost = NSHostingView(rootView: leadingContent)
-        let centerHost = NSHostingView(rootView: centerContent)
-        let trailingHost = NSHostingView(rootView: trailingContent)
-
-        for host in [leadingHost, centerHost, trailingHost] {
-            host.translatesAutoresizingMaskIntoConstraints = true
-            host.autoresizingMask = [.width, .height]
-        }
-
-        // Prevent system backdrop injection in the sidebar pane
-        leadingHost.wantsLayer = true
-        leadingHost.layer?.backgroundColor = NSColor.clear.cgColor
-
-        splitView.addSubview(leadingHost)
-        splitView.addSubview(centerHost)
-        splitView.addSubview(trailingHost)
-
-        self.view = splitView
-
-        // Strip system-injected backdrop views when entering fullscreen
-        fullScreenObserver = NotificationCenter.default.addObserver(
-            forName: NSWindow.didEnterFullScreenNotification,
-            object: nil, queue: .main
-        ) { [weak splitView] _ in
-            guard let splitView else { return }
-            // Small delay to catch views injected during the transition
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                Self.stripBackdropViews(in: splitView)
-            }
-        }
-    }
-
-    /// Recursively hides system-injected BackdropView and _NSScrollViewContentBackgroundView
-    /// that macOS adds to ScrollViews, which go opaque-dark in fullscreen.
-    private static func stripBackdropViews(in view: NSView) {
-        let typeName = String(describing: type(of: view))
-        if typeName.contains("BackdropView") || typeName.contains("_NSScrollViewContentBackgroundView") {
-            view.isHidden = true
-            view.alphaValue = 0
-        }
-        // Also disable background drawing on any NSScrollView / NSClipView
-        if let scrollView = view as? NSScrollView {
-            scrollView.drawsBackground = false
-            scrollView.contentView.drawsBackground = false
-        }
-        for subview in view.subviews {
-            stripBackdropViews(in: subview)
-        }
-    }
-
-    deinit {
-        if let obs = fullScreenObserver {
-            NotificationCenter.default.removeObserver(obs)
-        }
-    }
-
-    override func viewDidLayout() {
-        super.viewDidLayout()
-        guard !didSetInitialPositions,
-              let splitView = view as? NSSplitView,
-              splitView.frame.width > 100 else { return }
-        didSetInitialPositions = true
-        splitView.setPosition(200, ofDividerAt: 0)
-        splitView.setPosition(650, ofDividerAt: 1)
-    }
-
-    // MARK: - Resize constraints
-
-    func splitView(_ splitView: NSSplitView, constrainMinCoordinate proposedMinimumPosition: CGFloat, ofSubviewAt dividerIndex: Int) -> CGFloat {
-        if dividerIndex == 0 { return 180 }  // sidebar min
-        if dividerIndex == 1 { return 580 }  // terminal min (sidebar + terminal 400)
-        return proposedMinimumPosition
-    }
-
-    func splitView(_ splitView: NSSplitView, constrainMaxCoordinate proposedMaximumPosition: CGFloat, ofSubviewAt dividerIndex: Int) -> CGFloat {
-        if dividerIndex == 0 { return 220 }  // sidebar max
-        if dividerIndex == 1 { return splitView.frame.width - 500 }  // GUI panel min 500
-        return proposedMaximumPosition
-    }
+    override func drawDivider(in rect: NSRect) {}
 }
 
 // MARK: - 2-Pane Seamless Split View
@@ -225,52 +99,90 @@ final class SeamlessSplitVC2<L: View, T: View>: NSViewController, NSSplitViewDel
     }
 
     func splitView(_ splitView: NSSplitView, constrainMinCoordinate proposedMinimumPosition: CGFloat, ofSubviewAt dividerIndex: Int) -> CGFloat {
-        return 450  // terminal min
+        return 450
     }
 
     func splitView(_ splitView: NSSplitView, constrainMaxCoordinate proposedMaximumPosition: CGFloat, ofSubviewAt dividerIndex: Int) -> CGFloat {
-        return splitView.frame.width - 450  // GUI panel min
+        return splitView.frame.width - 450
     }
 }
 
-// MARK: - Window Configurator
+// MARK: - Transparent Window Setter
 
-/// Configures the hosting NSWindow for a seamless title-bar appearance.
-/// Handles fullscreen background: sets a rich dark color for the material to blur
-/// (in windowed mode, `.clear` lets the material blur the desktop wallpaper).
-struct WindowConfigurator: NSViewRepresentable {
-    var title: String? = nil
-
-    typealias NSViewType = NSView
-
-    /// Dark blue-gray that `.ultraThinMaterial` blurs in fullscreen,
-    /// giving the glass look even without a desktop wallpaper behind it.
-    private static let fullScreenBg = NSColor(
-        red: 0.10, green: 0.14, blue: 0.22, alpha: 1.0
-    )
-
-    func makeCoordinator() -> Coordinator {
-        Coordinator()
-    }
+/// Makes the window background transparent so .ultraThinMaterial shows through to the desktop.
+/// Swaps to opaque background in fullscreen to avoid rendering issues.
+struct TransparentWindowSetter: NSViewRepresentable {
+    func makeCoordinator() -> Coordinator { Coordinator() }
 
     func makeNSView(context: Context) -> NSView {
         let view = NSView()
         DispatchQueue.main.async {
             guard let window = view.window else { return }
-            window.titlebarAppearsTransparent = true
-            window.titleVisibility = .hidden
-            window.backgroundColor = .clear
-            window.isOpaque = false
-            window.styleMask.insert(.fullSizeContentView)
-            if window.toolbar == nil {
-                window.toolbar = NSToolbar()
-            }
-            window.toolbar?.showsBaselineSeparator = false
-            window.titlebarSeparatorStyle = .none
-            if let title {
-                window.title = title
-            }
+            Self.makeTransparent(window)
             context.coordinator.observeFullScreen(window: window)
+        }
+        return view
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {}
+
+    private static func makeTransparent(_ window: NSWindow) {
+        window.backgroundColor = .clear
+        window.isOpaque = false
+        window.titlebarAppearsTransparent = true
+        window.titlebarSeparatorStyle = .none
+    }
+
+    final class Coordinator: NSObject {
+        private var observers: [NSObjectProtocol] = []
+
+        func observeFullScreen(window: NSWindow) {
+            let nc = NotificationCenter.default
+            // Entering fullscreen: restore normal titlebar
+            let enterObs = nc.addObserver(
+                forName: NSWindow.willEnterFullScreenNotification,
+                object: window, queue: .main
+            ) { notification in
+                guard let w = notification.object as? NSWindow else { return }
+                w.titlebarAppearsTransparent = false
+                w.titlebarSeparatorStyle = .automatic
+            }
+            // Exiting fullscreen: re-apply transparency after animation
+            let exitObs = nc.addObserver(
+                forName: NSWindow.didExitFullScreenNotification,
+                object: window, queue: .main
+            ) { notification in
+                guard let w = notification.object as? NSWindow else { return }
+                TransparentWindowSetter.makeTransparent(w)
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                    TransparentWindowSetter.makeTransparent(w)
+                }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                    TransparentWindowSetter.makeTransparent(w)
+                }
+            }
+            observers = [enterObs, exitObs]
+        }
+
+        deinit {
+            for obs in observers {
+                NotificationCenter.default.removeObserver(obs)
+            }
+        }
+    }
+}
+
+// MARK: - Window Configurator (for project windows only)
+
+struct WindowConfigurator: NSViewRepresentable {
+    var title: String? = nil
+    typealias NSViewType = NSView
+
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView()
+        DispatchQueue.main.async {
+            guard let window = view.window else { return }
+            if let title { window.title = title }
         }
         return view
     }
@@ -279,35 +191,6 @@ struct WindowConfigurator: NSViewRepresentable {
         DispatchQueue.main.async {
             if let title, let window = nsView.window {
                 window.title = title
-            }
-        }
-    }
-
-    final class Coordinator: NSObject {
-        private var observers: [NSObjectProtocol] = []
-
-        func observeFullScreen(window: NSWindow) {
-            let nc = NotificationCenter.default
-            let enterObs = nc.addObserver(
-                forName: NSWindow.didEnterFullScreenNotification,
-                object: window, queue: .main
-            ) { notification in
-                guard let w = notification.object as? NSWindow else { return }
-                w.backgroundColor = WindowConfigurator.fullScreenBg
-            }
-            let exitObs = nc.addObserver(
-                forName: NSWindow.didExitFullScreenNotification,
-                object: window, queue: .main
-            ) { notification in
-                guard let w = notification.object as? NSWindow else { return }
-                w.backgroundColor = .clear
-            }
-            observers = [enterObs, exitObs]
-        }
-
-        deinit {
-            for obs in observers {
-                NotificationCenter.default.removeObserver(obs)
             }
         }
     }

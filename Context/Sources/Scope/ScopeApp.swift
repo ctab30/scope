@@ -255,7 +255,6 @@ struct ScopeApp: App {
                     .frame(width: 360)
                 }
         }
-        .windowStyle(.hiddenTitleBar)
         .defaultSize(width: 1400, height: 900)
         .commands {
             CommandGroup(replacing: .newItem) {
@@ -285,7 +284,6 @@ struct ScopeApp: App {
                 ProjectWindowView(projectId: projectId)
             }
         }
-        .windowStyle(.hiddenTitleBar)
         .defaultSize(width: 1200, height: 850)
 
         Settings {
