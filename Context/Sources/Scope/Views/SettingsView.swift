@@ -109,35 +109,12 @@ private struct GeneralSettingsTab: View {
                     .foregroundStyle(.tertiary)
             }
 
-            Section("MCP Setup") {
+            Section("Claude Code MCP") {
                 Button("Run Setup Wizard") {
                     showSetupWizard = true
                 }
-                Text("Re-run the MCP onboarding wizard to detect and connect CLI tools.")
+                Text("Re-run the MCP onboarding wizard to detect and connect Claude Code.")
                     .font(ScopeTheme.Font.caption)
-                    .foregroundStyle(.tertiary)
-            }
-
-            Section("Preferred CLI") {
-                Picker("Default coding CLI", selection: $settings.preferredCLI) {
-                    ForEach(CLIProvider.allCases) { cli in
-                        HStack(spacing: ScopeTheme.Spacing.sm) {
-                            Image(systemName: cli.iconName)
-                                .foregroundColor(cli.color)
-                            Text(cli.displayName)
-                            if !cli.isInstalled {
-                                Text("Not installed")
-                                    .font(ScopeTheme.Font.caption)
-                                    .foregroundStyle(.tertiary)
-                            }
-                        }
-                        .tag(cli)
-                    }
-                }
-                .pickerStyle(.radioGroup)
-
-                Text("Used for task launcher and quick-launch buttons")
-                    .font(ScopeTheme.Font.footnote)
                     .foregroundStyle(.tertiary)
             }
         }

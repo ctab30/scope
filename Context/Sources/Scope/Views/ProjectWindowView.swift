@@ -29,7 +29,6 @@ struct ProjectWindowView: View {
             if project != nil {
                 SeamlessSplitView2 {
                     TerminalTabView(projectPath: $projectPath, projectId: projectId)
-                        .padding(.leading, 12)
                 } trailing: {
                     GUIPanelView()
                 }

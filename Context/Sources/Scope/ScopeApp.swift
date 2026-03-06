@@ -322,39 +322,26 @@ struct ScopeApp: App {
         }
 
         // workspace://install-mcp?client=claude
-        guard url.host == "install-mcp",
-              let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
-              let clientParam = components.queryItems?.first(where: { $0.name == "client" })?.value,
-              let cli = CLIProvider(rawValue: clientParam) else {
-            return
-        }
+        guard url.host == "install-mcp" else { return }
 
         let injector = ContextInjector()
-        // Use the current project path if available, otherwise empty string
         let projectPath = appState.currentProject?.path ?? ""
 
         do {
-            // For Claude Code, prefer the `claude mcp add` command
-            if cli == .claude {
-                let binaryPath = ContextInjector.mcpBinaryPath
-                let process = Process()
-                process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
-                process.arguments = ["claude", "mcp", "add", "scope", binaryPath]
-                process.standardOutput = FileHandle.nullDevice
-                process.standardError = FileHandle.nullDevice
-                try process.run()
-                process.waitUntilExit()
+            let binaryPath = ContextInjector.mcpBinaryPath
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+            process.arguments = ["claude", "mcp", "add", "scope", binaryPath]
+            process.standardOutput = FileHandle.nullDevice
+            process.standardError = FileHandle.nullDevice
+            try process.run()
+            process.waitUntilExit()
 
-                if process.terminationStatus == 0 {
-                    deepLinkResult = .success(cli)
-                } else {
-                    // Fall back to file-based config
-                    _ = try injector.installMCP(for: cli, projectPath: projectPath)
-                    deepLinkResult = .success(cli)
-                }
+            if process.terminationStatus == 0 {
+                deepLinkResult = .success(.claude)
             } else {
-                _ = try injector.installMCP(for: cli, projectPath: projectPath)
-                deepLinkResult = .success(cli)
+                _ = try injector.installMCP(for: .claude, projectPath: projectPath)
+                deepLinkResult = .success(.claude)
             }
         } catch {
             deepLinkResult = .failure(error.localizedDescription)

@@ -1,12 +1,12 @@
 import SwiftUI
 
-/// Four-step onboarding wizard presented on first launch.
-/// Guides users through detecting installed CLIs and connecting Scope's MCP server.
+/// Three-step onboarding wizard presented on first launch.
+/// Detects Claude Code and connects Scope's MCP server.
 struct MCPSetupView: View {
     @Environment(\.dismiss) private var dismiss
 
     @State private var currentStep = 0
-    @State private var cliStatuses: [CLIProvider: CLIStatus] = [:]
+    @State private var claudeStatus: CLIStatus = .checking
 
     private enum CLIStatus {
         case checking
@@ -19,9 +19,8 @@ struct MCPSetupView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Step indicator
             HStack(spacing: ScopeTheme.Spacing.sm) {
-                ForEach(0..<4, id: \.self) { step in
+                ForEach(0..<3, id: \.self) { step in
                     Circle()
                         .fill(step <= currentStep ? Color.accentColor : Color.secondary.opacity(0.3))
                         .frame(width: 7, height: 7)
@@ -30,12 +29,10 @@ struct MCPSetupView: View {
             .padding(.top, ScopeTheme.Spacing.xl)
             .padding(.bottom, ScopeTheme.Spacing.lg)
 
-            // Step content — fills remaining space
             switch currentStep {
             case 0: welcomeStep
-            case 1: detectStep
-            case 2: connectStep
-            case 3: doneStep
+            case 1: connectStep
+            case 2: doneStep
             default: EmptyView()
             }
         }
@@ -58,7 +55,7 @@ struct MCPSetupView: View {
                 .font(ScopeTheme.Font.largeNumber)
                 .padding(.bottom, ScopeTheme.Spacing.sm)
 
-            Text("Scope connects to your AI coding CLIs via MCP,\ngiving them project memory, tasks, notes, and more.")
+            Text("Scope connects to Claude Code via MCP,\ngiving it project memory, tasks, notes, and more.")
                 .font(ScopeTheme.Font.body)
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)
@@ -68,28 +65,47 @@ struct MCPSetupView: View {
 
             stepButton("Get Started") {
                 currentStep = 1
-                Task { await detectCLIs() }
+                Task { await detectClaude() }
             }
         }
     }
 
-    // MARK: - Step 2: Detect CLIs
+    // MARK: - Step 2: Connect
 
-    private var detectStep: some View {
+    private var connectStep: some View {
         VStack(spacing: 0) {
-            Text("Detected CLIs")
+            Text("Connect Claude Code")
                 .font(ScopeTheme.Font.title)
                 .padding(.bottom, ScopeTheme.Spacing.xxs)
 
-            Text("Scope found these AI coding tools on your system.")
+            Text("Scope will register its MCP server\nwith Claude Code on your system.")
                 .font(ScopeTheme.Font.footnote)
                 .foregroundColor(.secondary)
+                .multilineTextAlignment(.center)
 
             Spacer()
 
-            cliList { cli in
-                statusBadge(for: cli)
+            // Claude Code status row
+            HStack(spacing: ScopeTheme.Spacing.md) {
+                Image(systemName: "c.circle.fill")
+                    .font(.system(size: 16))
+                    .foregroundColor(.white)
+                    .frame(width: 24)
+
+                Text("Claude Code")
+                    .font(ScopeTheme.Font.bodyMedium)
+
+                Spacer()
+
+                connectBadge
             }
+            .padding(.horizontal, ScopeTheme.Spacing.md)
+            .padding(.vertical, ScopeTheme.Spacing.sm)
+            .background(
+                RoundedRectangle(cornerRadius: ScopeTheme.Radius.small)
+                    .fill(ScopeTheme.Colors.controlBg)
+            )
+            .padding(.horizontal, 48)
 
             Spacer()
 
@@ -100,69 +116,16 @@ struct MCPSetupView: View {
     }
 
     @ViewBuilder
-    private func statusBadge(for cli: CLIProvider) -> some View {
-        switch cliStatuses[cli] ?? .checking {
-        case .checking:
-            ProgressView()
-                .controlSize(.small)
-                .scaleEffect(0.7)
-        case .installed, .connected:
-            Image(systemName: "checkmark.circle.fill")
-                .font(ScopeTheme.Font.headline)
-                .foregroundColor(.green)
-        case .notInstalled:
-            Image(systemName: "xmark.circle")
-                .font(ScopeTheme.Font.headline)
-                .foregroundColor(.secondary.opacity(0.5))
-        case .connecting:
-            ProgressView()
-                .controlSize(.small)
-                .scaleEffect(0.7)
-        case .failed:
-            Image(systemName: "exclamationmark.triangle.fill")
-                .font(ScopeTheme.Font.headline)
-                .foregroundColor(.white)
-        }
-    }
-
-    // MARK: - Step 3: Connect
-
-    private var connectStep: some View {
-        VStack(spacing: 0) {
-            Text("Connect MCP")
-                .font(ScopeTheme.Font.title)
-                .padding(.bottom, ScopeTheme.Spacing.xxs)
-
-            Text("Click Connect to configure each CLI\nto use Scope's MCP server.")
-                .font(ScopeTheme.Font.footnote)
-                .foregroundColor(.secondary)
-                .multilineTextAlignment(.center)
-
-            Spacer()
-
-            cliList { cli in
-                connectButton(for: cli, status: cliStatuses[cli] ?? .notInstalled)
-            }
-
-            Spacer()
-
-            stepButton("Continue") {
-                currentStep = 3
-            }
-        }
-    }
-
-    @ViewBuilder
-    private func connectButton(for cli: CLIProvider, status: CLIStatus) -> some View {
-        switch status {
-        case .notInstalled:
-            Text("Not installed")
-                .font(ScopeTheme.Font.footnote)
-                .foregroundColor(.secondary.opacity(0.5))
+    private var connectBadge: some View {
+        switch claudeStatus {
         case .checking, .connecting:
             ProgressView()
                 .controlSize(.small)
                 .scaleEffect(0.7)
+        case .notInstalled:
+            Text("Not installed")
+                .font(ScopeTheme.Font.footnote)
+                .foregroundColor(.secondary.opacity(0.5))
         case .connected:
             HStack(spacing: ScopeTheme.Spacing.xxs) {
                 Image(systemName: "checkmark.circle.fill")
@@ -173,7 +136,7 @@ struct MCPSetupView: View {
             .font(ScopeTheme.Font.footnoteMedium)
         case .failed(let msg):
             Button {
-                Task { await connectCLI(cli) }
+                Task { await connectClaude() }
             } label: {
                 Text("Retry")
                     .font(ScopeTheme.Font.footnoteMedium)
@@ -183,7 +146,7 @@ struct MCPSetupView: View {
             .help(msg)
         case .installed:
             Button {
-                Task { await connectCLI(cli) }
+                Task { await connectClaude() }
             } label: {
                 Text("Connect")
                     .font(ScopeTheme.Font.footnoteMedium)
@@ -193,7 +156,7 @@ struct MCPSetupView: View {
         }
     }
 
-    // MARK: - Step 4: Done
+    // MARK: - Step 3: Done
 
     private var doneStep: some View {
         VStack(spacing: 0) {
@@ -208,21 +171,12 @@ struct MCPSetupView: View {
                 .font(ScopeTheme.Font.largeNumber)
                 .padding(.bottom, ScopeTheme.Spacing.xs)
 
-            let connectedCLIs = CLIProvider.allCases.filter {
-                if case .connected = cliStatuses[$0] { return true }
-                return false
-            }
-
-            if !connectedCLIs.isEmpty {
-                HStack(spacing: ScopeTheme.Spacing.md) {
-                    ForEach(connectedCLIs) { cli in
-                        HStack(spacing: ScopeTheme.Spacing.xxs) {
-                            Image(systemName: cli.iconName)
-                                .foregroundColor(cli.color)
-                            Text(cli.displayName)
-                                .font(ScopeTheme.Font.footnoteMedium)
-                        }
-                    }
+            if case .connected = claudeStatus {
+                HStack(spacing: ScopeTheme.Spacing.xxs) {
+                    Image(systemName: "c.circle.fill")
+                        .foregroundColor(.white)
+                    Text("Claude Code")
+                        .font(ScopeTheme.Font.footnoteMedium)
                 }
                 .foregroundColor(.secondary)
                 .padding(.bottom, ScopeTheme.Spacing.sm)
@@ -250,7 +204,7 @@ struct MCPSetupView: View {
 
             Spacer()
 
-            Text("Restart your CLI sessions to activate.")
+            Text("Restart your Claude Code session to activate.")
                 .font(ScopeTheme.Font.footnote)
                 .foregroundColor(.secondary)
                 .padding(.bottom, ScopeTheme.Spacing.xs)
@@ -264,7 +218,6 @@ struct MCPSetupView: View {
 
     // MARK: - Shared Components
 
-    /// Consistent bottom action button used by every step.
     private func stepButton(_ title: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(title)
@@ -277,38 +230,8 @@ struct MCPSetupView: View {
         .padding(.bottom, ScopeTheme.Spacing.xl)
     }
 
-    /// Reusable CLI list used by detect and connect steps.
-    private func cliList<Trailing: View>(@ViewBuilder trailing: @escaping (CLIProvider) -> Trailing) -> some View {
-        VStack(spacing: ScopeTheme.Spacing.xxs) {
-            ForEach(CLIProvider.allCases) { cli in
-                HStack(spacing: ScopeTheme.Spacing.md) {
-                    Image(systemName: cli.iconName)
-                        .font(.system(size: 16))
-                        .foregroundColor(cli.color)
-                        .frame(width: 24)
-
-                    Text(cli.displayName)
-                        .font(ScopeTheme.Font.bodyMedium)
-
-                    Spacer()
-
-                    trailing(cli)
-                }
-                .padding(.horizontal, ScopeTheme.Spacing.md)
-                .padding(.vertical, ScopeTheme.Spacing.sm)
-                .background(
-                    RoundedRectangle(cornerRadius: ScopeTheme.Radius.small)
-                        .fill(ScopeTheme.Colors.controlBg)
-                )
-            }
-        }
-        .padding(.horizontal, 48)
-    }
-
     // MARK: - Logic
 
-    /// Run a shell command using a login shell so the user's full PATH is available.
-    /// GUI .app bundles have a minimal PATH that won't include homebrew/npm bins.
     private func shellRun(_ command: String) async -> (status: Int32, output: String) {
         await Task.detached(priority: .userInitiated) {
             let process = Process()
@@ -330,49 +253,32 @@ struct MCPSetupView: View {
         }.value
     }
 
-    private func detectCLIs() async {
-        for cli in CLIProvider.allCases {
-            cliStatuses[cli] = .checking
-        }
-
-        // Use login shell to find CLIs (GUI apps have limited PATH)
-        for cli in CLIProvider.allCases {
-            let result = await shellRun("which \(cli.command)")
-            cliStatuses[cli] = (result.status == 0 && !result.output.isEmpty) ? .installed : .notInstalled
-        }
+    private func detectClaude() async {
+        claudeStatus = .checking
+        let result = await shellRun("which claude")
+        claudeStatus = (result.status == 0 && !result.output.isEmpty) ? .installed : .notInstalled
     }
 
-    private func connectCLI(_ cli: CLIProvider) async {
-        cliStatuses[cli] = .connecting
+    private func connectClaude() async {
+        claudeStatus = .connecting
         let binaryPath = ContextInjector.mcpBinaryPath
 
-        if cli == .claude {
-            // Use login shell so `claude` is found in PATH
-            let result = await shellRun("claude mcp add scope '\(binaryPath)'")
-            if result.status == 0 {
-                cliStatuses[cli] = .connected
-                return
-            }
-            // Fall through to file-based config
+        // Try `claude mcp add` first
+        let result = await shellRun("claude mcp add scope '\(binaryPath)'")
+        if result.status == 0 {
+            claudeStatus = .connected
+            return
         }
 
-        // File-based MCP config for non-Claude CLIs or as Claude fallback
+        // Fall back to writing ~/.claude.json directly
         do {
-            let injector = ContextInjector()
-            if cli == .claude {
-                // Claude's config is project-scoped (.mcp.json), so for global setup
-                // write directly to ~/.claude.json
-                try installClaudeGlobalMCP(binaryPath: binaryPath)
-            } else {
-                _ = try injector.installMCP(for: cli, projectPath: "")
-            }
-            cliStatuses[cli] = .connected
+            try installClaudeGlobalMCP(binaryPath: binaryPath)
+            claudeStatus = .connected
         } catch {
-            cliStatuses[cli] = .failed(error.localizedDescription)
+            claudeStatus = .failed(error.localizedDescription)
         }
     }
 
-    /// Write MCP config to Claude Code's global settings file (~/.claude.json).
     private func installClaudeGlobalMCP(binaryPath: String) throws {
         let home = FileManager.default.homeDirectoryForCurrentUser
         let configPath = home.appendingPathComponent(".claude.json")

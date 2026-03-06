@@ -14,7 +14,6 @@ struct MainSplitView: View {
         } detail: {
             SeamlessSplitView2 {
                 TerminalTabView(projectPath: $projectPath, projectId: appState.currentProject?.id ?? "")
-                    .padding(.leading, 12)
             } trailing: {
                 GUIPanelView()
             }

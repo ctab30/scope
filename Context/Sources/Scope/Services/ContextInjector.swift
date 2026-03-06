@@ -167,7 +167,7 @@ class ContextInjector {
             .path
     }
 
-    /// Install MCP config for a specific CLI provider.
+    /// Install MCP config for Claude Code.
     /// Merge-safe: parses existing config and only adds/updates the scope entry.
     /// Returns the path where the config was written.
     func installMCP(for cli: CLIProvider, projectPath: String) throws -> String {
@@ -185,65 +185,17 @@ class ContextInjector {
             configPath = (NSHomeDirectory() as NSString).appendingPathComponent(relativePath)
         }
 
-        switch cli {
-        case .claude:
-            try installJSONMCP(at: configPath, topKey: "mcpServers", serverEntry: ["command": binaryPath])
-        case .gemini:
-            try installJSONMCP(at: configPath, topKey: "mcpServers", serverEntry: ["command": binaryPath])
-        case .codex:
-            try installCodexMCP(at: configPath, binaryPath: binaryPath)
-        }
+        // Ensure parent directory exists
+        let dir = (configPath as NSString).deletingLastPathComponent
+        try fileManager.createDirectory(atPath: dir, withIntermediateDirectories: true)
+
+        var config = readJSONDict(at: configPath)
+        var servers = config["mcpServers"] as? [String: Any] ?? [:]
+        servers["scope"] = ["command": binaryPath]
+        config["mcpServers"] = servers
+        try writeJSON(config, to: configPath)
 
         return configPath
-    }
-
-    /// Install MCP config into a JSON file. Merges with existing content.
-    private func installJSONMCP(at path: String, topKey: String, serverEntry: Any) throws {
-        // Ensure parent directory exists
-        let dir = (path as NSString).deletingLastPathComponent
-        try fileManager.createDirectory(atPath: dir, withIntermediateDirectories: true)
-
-        var config = readJSONDict(at: path)
-        var servers = config[topKey] as? [String: Any] ?? [:]
-        servers["scope"] = serverEntry
-        config[topKey] = servers
-        try writeJSON(config, to: path)
-    }
-
-    /// Install MCP config into Codex's TOML config file. Merge-safe.
-    private func installCodexMCP(at path: String, binaryPath: String) throws {
-        let dir = (path as NSString).deletingLastPathComponent
-        try fileManager.createDirectory(atPath: dir, withIntermediateDirectories: true)
-
-        let escapedPath = binaryPath
-            .replacingOccurrences(of: "\\", with: "\\\\")
-            .replacingOccurrences(of: "\"", with: "\\\"")
-
-        let section = """
-
-        [mcp_servers.scope]
-        command = "\(escapedPath)"
-        args = []
-        """
-
-        if fileManager.fileExists(atPath: path) {
-            var content = try String(contentsOfFile: path, encoding: .utf8)
-            // Remove existing scope section if present
-            let pattern = #"\[mcp_servers\.scope\][^\[]*"#
-            if let regex = try? NSRegularExpression(pattern: pattern, options: [.dotMatchesLineSeparators]) {
-                content = regex.stringByReplacingMatches(
-                    in: content,
-                    range: NSRange(content.startIndex..., in: content),
-                    withTemplate: ""
-                )
-            }
-            content = content.trimmingCharacters(in: .whitespacesAndNewlines)
-            content += "\n" + section + "\n"
-            try content.write(toFile: path, atomically: true, encoding: .utf8)
-        } else {
-            try (section.trimmingCharacters(in: .newlines) + "\n")
-                .write(toFile: path, atomically: true, encoding: .utf8)
-        }
     }
 
     // MARK: - JSON Helpers

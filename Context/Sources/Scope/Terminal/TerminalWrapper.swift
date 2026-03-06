@@ -12,6 +12,11 @@ final class FocusableTerminalView: LocalProcessTerminalView {
     /// Guards focus-claiming so hidden terminals in a ZStack don't steal input.
     var isActiveTab: Bool = true
 
+    /// Fired once when the frame settles at a non-zero size (no changes for 150ms).
+    var onFrameStabilized: (() -> Void)?
+    private var frameDebounceWork: DispatchWorkItem?
+    private var didFireFrameStabilized = false
+
     /// Allow transparency so the window's vibrancy material shows through.
     override var isOpaque: Bool { false }
 
@@ -50,6 +55,18 @@ final class FocusableTerminalView: LocalProcessTerminalView {
     override func setFrameSize(_ newSize: NSSize) {
         guard newSize.width > 0 && newSize.height > 0 else { return }
         super.setFrameSize(newSize)
+
+        // Debounce: fire onFrameStabilized once the frame stops changing
+        guard !didFireFrameStabilized, onFrameStabilized != nil else { return }
+        frameDebounceWork?.cancel()
+        let work = DispatchWorkItem { [weak self] in
+            guard let self, !self.didFireFrameStabilized else { return }
+            self.didFireFrameStabilized = true
+            self.onFrameStabilized?()
+            self.onFrameStabilized = nil
+        }
+        frameDebounceWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15, execute: work)
     }
 
     // MARK: - File Drag-and-Drop (NSDraggingDestination)
@@ -143,6 +160,7 @@ struct TerminalWrapper: NSViewRepresentable {
         var parent: TerminalWrapper
         weak var terminalView: FocusableTerminalView?
         var mouseMonitor: Any?
+        var pendingCommand: String?
 
         init(_ parent: TerminalWrapper) {
             self.parent = parent
@@ -219,6 +237,32 @@ struct TerminalWrapper: NSViewRepresentable {
         func sendText(_ text: String) {
             terminalView?.send(txt: text)
         }
+
+        /// Send the pending initial command, then nudge the terminal frame
+        /// so SwiftTerm updates the PTY winsize via ioctl — the kernel then
+        /// delivers SIGWINCH to Claude Code's actual foreground process group.
+        func sendPendingCommand() {
+            guard let command = pendingCommand else { return }
+            pendingCommand = nil
+
+            // Small delay for shell prompt readiness after frame stabilization
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
+                guard let self, let tv = self.terminalView else { return }
+                self.sendText(command + "\n")
+
+                // After Claude Code has started, nudge the frame to trigger a
+                // real PTY resize (ioctl TIOCSWINSZ → kernel SIGWINCH).
+                for delay in [1.5, 3.0] {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak tv] in
+                        guard let tv else { return }
+                        let size = tv.frame.size
+                        guard size.width > 1 else { return }
+                        tv.setFrameSize(NSSize(width: size.width - 1, height: size.height))
+                        tv.setFrameSize(size)
+                    }
+                }
+            }
+        }
     }
 
     // MARK: - NSViewRepresentable
@@ -239,10 +283,13 @@ struct TerminalWrapper: NSViewRepresentable {
         context.coordinator.installClickFocusMonitor(for: terminal)
         TerminalTracker.shared.register(terminal)
 
-        // Send initial command after shell has time to initialize
+        // Wait for the terminal frame to stabilize (NSSplitView divider
+        // positioning) before sending the initial command so Claude Code
+        // reads the correct $COLUMNS at launch.
         if let command = initialCommand, !command.isEmpty {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                context.coordinator.sendText(command + "\n")
+            context.coordinator.pendingCommand = command
+            terminal.onFrameStabilized = { [weak coordinator = context.coordinator] in
+                coordinator?.sendPendingCommand()
             }
         }
 

@@ -28,10 +28,6 @@ class AppSettings: ObservableObject {
     @Published var embeddingModel: String {
         didSet { UserDefaults.standard.set(embeddingModel, forKey: "embeddingModel") }
     }
-    @Published var preferredCLI: CLIProvider {
-        didSet { UserDefaults.standard.set(preferredCLI.rawValue, forKey: "preferredCLI") }
-    }
-
     // Notifications
     @Published var notifyOnClaudeDone: Bool {
         didSet { UserDefaults.standard.set(notifyOnClaudeDone, forKey: "notifyOnClaudeDone") }
@@ -72,8 +68,6 @@ class AppSettings: ObservableObject {
         self.scrollbackLines = defaults.object(forKey: "scrollbackLines") as? Int ?? 10000
         self.contextSearchEnabled = defaults.object(forKey: "contextSearchEnabled") as? Bool ?? true
         self.embeddingModel = defaults.string(forKey: "embeddingModel") ?? "openai/text-embedding-3-small"
-        self.preferredCLI = CLIProvider(rawValue: defaults.string(forKey: "preferredCLI") ?? "") ?? .claude
-
         self.notifyOnClaudeDone = defaults.object(forKey: "notifyOnClaudeDone") as? Bool ?? true
 
         self.browserAllowedDomains = defaults.stringArray(forKey: "browserAllowedDomains") ?? []

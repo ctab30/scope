@@ -2476,7 +2476,7 @@ class MCPServer {
 
     // MARK: - Browser Command Execution
 
-    func executeBrowserCommand(tool: String, args: [String: Any] = [:], timeout: TimeInterval = 5.0) throws -> String {
+    func executeBrowserCommand(tool: String, args: [String: Any] = [:], timeout: TimeInterval = 5.0, retries: Int = 1) throws -> String {
         let argsJSON: String?
         if args.isEmpty {
             argsJSON = nil
@@ -2487,60 +2487,97 @@ class MCPServer {
             argsJSON = nil
         }
 
-        var command = BrowserCommand(
-            id: nil,
-            tool: tool,
-            args: argsJSON,
-            status: "pending",
-            result: nil,
-            createdAt: Date(),
-            completedAt: nil
-        )
+        var lastError: String?
 
-        try db.write { db in
-            try command.insert(db)
-        }
+        for attempt in 0...retries {
+            var command = BrowserCommand(
+                id: nil,
+                tool: tool,
+                args: argsJSON,
+                status: "pending",
+                result: nil,
+                createdAt: Date(),
+                completedAt: nil
+            )
 
-        guard let commandId = command.id else {
-            throw MCPError(message: "Failed to insert browser command")
-        }
-
-        let startTime = Date()
-        while Date().timeIntervalSince(startTime) < timeout {
-            Thread.sleep(forTimeInterval: 0.05) // 50ms polling
-
-            let updated = try db.read { db in
-                try BrowserCommand.fetchOne(db, key: commandId)
+            try db.write { db in
+                try command.insert(db)
             }
 
-            guard let cmd = updated else {
-                throw MCPError(message: "Browser command \(commandId) disappeared")
+            guard let commandId = command.id else {
+                throw MCPError(message: "Failed to insert browser command")
             }
 
-            switch cmd.status {
-            case "completed":
-                // Clean up
-                _ = try? db.write { db in
-                    try BrowserCommand.deleteOne(db, key: commandId)
+            let startTime = Date()
+            // Adaptive polling: start fast (20ms), ramp up to 200ms
+            var pollInterval: TimeInterval = 0.02
+            // Once GUI claims the command, extend deadline so in-flight work isn't killed
+            var effectiveTimeout = timeout
+            var wasPickedUp = false
+
+            while Date().timeIntervalSince(startTime) < effectiveTimeout {
+                Thread.sleep(forTimeInterval: pollInterval)
+                pollInterval = min(pollInterval * 1.5, 0.2)
+
+                let updated = try db.read { db in
+                    try BrowserCommand.fetchOne(db, key: commandId)
                 }
-                return cmd.result ?? "{}"
 
-            case "error":
-                _ = try? db.write { db in
-                    try BrowserCommand.deleteOne(db, key: commandId)
+                guard let cmd = updated else {
+                    // Command disappeared — GUI may have cleaned it up
+                    lastError = "Browser command disappeared unexpectedly"
+                    break
                 }
-                throw MCPError(message: cmd.result ?? "Browser command failed")
 
-            default:
-                continue
+                switch cmd.status {
+                case "completed":
+                    _ = try? db.write { db in
+                        try BrowserCommand.deleteOne(db, key: commandId)
+                    }
+                    return cmd.result ?? "{}"
+
+                case "error":
+                    _ = try? db.write { db in
+                        try BrowserCommand.deleteOne(db, key: commandId)
+                    }
+                    throw MCPError(message: cmd.result ?? "Browser command failed")
+
+                case "executing":
+                    // GUI picked it up — give it extra time to finish (up to 30s total)
+                    if !wasPickedUp {
+                        wasPickedUp = true
+                        effectiveTimeout = max(effectiveTimeout, 30.0)
+                    }
+                    pollInterval = 0.1
+                    continue
+
+                default:
+                    continue
+                }
+            }
+
+            // Timeout — mark as timed_out so GUI knows to skip it, then clean up
+            _ = try? db.write { db in
+                try db.execute(
+                    sql: "UPDATE browserCommands SET status = 'timed_out' WHERE id = ? AND status = 'pending'",
+                    arguments: [commandId]
+                )
+                // Only delete if still pending/timed_out (not if GUI grabbed it)
+                try db.execute(
+                    sql: "DELETE FROM browserCommands WHERE id = ? AND status IN ('timed_out')",
+                    arguments: [commandId]
+                )
+            }
+
+            lastError = "Browser command timed out after \(Int(timeout))s"
+
+            if attempt < retries {
+                // Brief pause before retry
+                Thread.sleep(forTimeInterval: 0.2)
             }
         }
 
-        // Timeout — clean up and report
-        _ = try? db.write { db in
-            try BrowserCommand.deleteOne(db, key: commandId)
-        }
-        throw MCPError(message: "Browser command timed out after \(Int(timeout))s. Is Scope running with the browser tab visible?")
+        throw MCPError(message: "\(lastError ?? "Browser command failed"). Is Scope running with the browser tab visible?")
     }
 
     // MARK: - Context Engine

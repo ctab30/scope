@@ -35,8 +35,8 @@ class BrowserCommandExecutor: ObservableObject {
     // MARK: - Polling
 
     private func startPolling() {
-        // Poll every 100ms for pending commands from ScopeMCP (cross-process writes)
-        pollTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
+        // Poll every 50ms for pending commands from ScopeMCP (matches MCP-side initial poll rate)
+        pollTimer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
                 await self?.pollForCommands()
             }
@@ -64,6 +64,15 @@ class BrowserCommandExecutor: ObservableObject {
         }
 
         for command in commands {
+            // Skip commands that are stale (older than 30s and still pending — MCP likely timed out)
+            if command.createdAt.timeIntervalSinceNow < -30 {
+                var stale = command
+                stale.status = "error"
+                stale.result = "Command expired (pending for >30s)"
+                stale.completedAt = Date()
+                updateCommand(&stale, in: dbQueue)
+                continue
+            }
             await execute(command)
         }
     }
@@ -73,10 +82,24 @@ class BrowserCommandExecutor: ObservableObject {
     private func execute(_ command: BrowserCommand) async {
         guard let dbQueue = db.dbQueue else { return }
 
-        // Mark as executing
+        // Atomically claim the command: only proceed if still "pending"
+        // This prevents executing commands that MCP already timed out on
+        let claimed: Bool
+        do {
+            claimed = try await dbQueue.write { db in
+                try db.execute(
+                    sql: "UPDATE browserCommands SET status = 'executing' WHERE id = ? AND status = 'pending'",
+                    arguments: [command.id]
+                )
+                return db.changesCount > 0
+            }
+        } catch {
+            return
+        }
+        guard claimed else { return }
+
         var cmd = command
         cmd.status = "executing"
-        updateCommand(&cmd, in: dbQueue)
 
         do {
             let result = try await dispatch(cmd)
@@ -814,7 +837,8 @@ class BrowserCommandExecutor: ObservableObject {
     // MARK: - Cleanup
 
     private func startCleanupTimer() {
-        cleanupTimer = Timer.scheduledTimer(withTimeInterval: 300, repeats: true) { [weak self] _ in
+        // Run cleanup every 60s instead of 300s to catch stale commands faster
+        cleanupTimer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in
             Task { @MainActor in
                 self?.cleanupOldCommands()
             }
@@ -823,11 +847,18 @@ class BrowserCommandExecutor: ObservableObject {
 
     private func cleanupOldCommands() {
         guard let dbQueue = db.dbQueue else { return }
-        let cutoff = Date().addingTimeInterval(-3600) // 1 hour ago
+        let completedCutoff = Date().addingTimeInterval(-300) // 5 min for completed/error
+        let staleCutoff = Date().addingTimeInterval(-60)       // 1 min for pending/timed_out
         _ = try? dbQueue.write { db in
+            // Clean up completed/error commands older than 5 minutes
             try BrowserCommand
                 .filter(Column("status") == "completed" || Column("status") == "error")
-                .filter(Column("completedAt") < cutoff)
+                .filter(Column("createdAt") < completedCutoff)
+                .deleteAll(db)
+            // Clean up stale pending or timed_out commands older than 1 minute
+            try BrowserCommand
+                .filter(Column("status") == "pending" || Column("status") == "timed_out")
+                .filter(Column("createdAt") < staleCutoff)
                 .deleteAll(db)
         }
     }
