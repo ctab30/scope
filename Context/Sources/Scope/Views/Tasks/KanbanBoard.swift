@@ -17,7 +17,7 @@ struct KanbanBoard: View {
         VStack(spacing: 0) {
             // Toolbar
             HStack {
-                Text("Task Board")
+                Text("Task Board by Project")
                     .font(ScopeTheme.Font.bodySemibold)
 
                 Spacer()
@@ -202,6 +202,50 @@ struct KanbanBoard: View {
             updated.completedAt = nil
         }
         saveTask(updated)
+
+        // When moving to in_progress, spawn a Claude session and track the task
+        if newStatus == "in_progress" {
+            launchTaskSession(task)
+        } else {
+            // Clear active task tracking when leaving in_progress
+            ActiveTaskTracker.untrack(projectId: task.projectId)
+        }
+    }
+
+    private func launchTaskSession(_ task: TaskItem) {
+        // Write active-tasks file so hooks can track this task
+        if let taskId = task.id {
+            ActiveTaskTracker.track(taskId: taskId, projectId: task.projectId)
+        }
+
+        var prompt = task.title
+        if let desc = task.description, !desc.isEmpty {
+            prompt += "\n\nDescription: \(desc)"
+        }
+        let priority = TaskItem.Priority(rawValue: task.priority) ?? .none
+        if priority != .none {
+            prompt += "\nPriority: \(priority.label)"
+        }
+        let labels = task.labelsArray
+        if !labels.isEmpty {
+            prompt += "\nLabels: \(labels.joined(separator: ", "))"
+        }
+        let attachments = task.attachmentsArray
+        if !attachments.isEmpty {
+            prompt += "\nAttachments: \(attachments.joined(separator: ", "))"
+        }
+
+        let command = "claude \"\(prompt.replacingOccurrences(of: "\"", with: "\\\"").replacingOccurrences(of: "\n", with: "\\n"))\""
+
+        NotificationCenter.default.post(
+            name: .launchTask,
+            object: nil,
+            userInfo: [
+                LaunchTaskKey.title: task.title,
+                LaunchTaskKey.command: command,
+                LaunchTaskKey.projectId: task.projectId
+            ]
+        )
     }
 
     private func moveTaskById(_ taskId: Int64, to newStatus: String) {

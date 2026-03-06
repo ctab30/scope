@@ -107,6 +107,11 @@ struct ScopeApp: App {
         // macOS blocks binaries inside .app bundles from being spawned as subprocesses,
         // so Claude Code needs the binary at a standalone path.
         Self.deployMCPBinary()
+
+        // Ensure active-tasks directory exists for hook scripts
+        let activeTasksDir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)
+            .first!.appendingPathComponent("Scope/active-tasks", isDirectory: true)
+        try? FileManager.default.createDirectory(at: activeTasksDir, withIntermediateDirectories: true)
     }
 
     /// Copies the ScopeMCP binary from the app bundle to Application Support

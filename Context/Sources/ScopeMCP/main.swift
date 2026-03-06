@@ -645,7 +645,7 @@ class MCPServer {
             ],
             [
                 "name": "list_tasks",
-                "description": "List tasks for a project. Returns task ID, title, status, priority, and description. project_id is auto-detected from working directory if omitted.",
+                "description": "List tasks for this project. ALWAYS call this when asked about tasks, todos, or work items. Returns task ID, title, status, priority, and description. project_id is auto-detected from working directory if omitted.",
                 "inputSchema": [
                     "type": "object",
                     "properties": [
@@ -682,7 +682,7 @@ class MCPServer {
             ],
             [
                 "name": "update_task",
-                "description": "Update a task's fields. Set status to 'needs_attention' when blocked, waiting for user input, or requiring human review before continuing.",
+                "description": "Update a task's fields. Call with status='in_progress' when starting work on a task. Call with status='done' when complete. Set status='needs_attention' when blocked or waiting for user input.",
                 "inputSchema": [
                     "type": "object",
                     "properties": [

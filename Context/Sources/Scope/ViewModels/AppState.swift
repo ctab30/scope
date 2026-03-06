@@ -89,6 +89,10 @@ class AppState: ObservableObject {
         // Ensure .claude/ directory exists
         try? FileManager.default.createDirectory(at: claudeDir, withIntermediateDirectories: true)
 
+        // Update CLAUDE.md with Scope MCP tool instructions
+        let injector = ContextInjector()
+        try? injector.updateClaudeMD(for: project)
+
         // Write the project-level hook script to ~/.scope/hooks/
         let homeDir = FileManager.default.homeDirectoryForCurrentUser
         let hooksDir = homeDir.appendingPathComponent(".scope/hooks", isDirectory: true)
@@ -110,19 +114,24 @@ class AppState: ObservableObject {
         // moves a task to in_progress. The hook reads that file to move only that specific task.
         let script = """
         #!/bin/bash
-        DB='\(dbPath)'
-        PROJECT='\(project.id)'
-        TASK_FILE='\(activeTasksDir)/\(project.id)'
+        # Background the delay so the hook returns immediately (avoids timeout kill)
+        (
+            sleep 30
 
-        [ ! -f "$TASK_FILE" ] && exit 0
-        TASK_ID=$(cat "$TASK_FILE" 2>/dev/null)
-        [ -z "$TASK_ID" ] && exit 0
+            DB='\(dbPath)'
+            TASK_FILE='\(activeTasksDir)/\(project.id)'
 
-        TITLE=$(/usr/bin/sqlite3 "$DB" "SELECT title FROM taskItems WHERE id = $TASK_ID AND status = 'in_progress' LIMIT 1;" 2>/dev/null)
-        [ -z "$TITLE" ] && exit 0
+            [ ! -f "$TASK_FILE" ] && exit 0
+            TASK_ID=$(cat "$TASK_FILE" 2>/dev/null)
+            [ -z "$TASK_ID" ] && exit 0
 
-        /usr/bin/sqlite3 "$DB" "UPDATE taskItems SET status = 'needs_attention' WHERE id = $TASK_ID AND status = 'in_progress';"
-        '\(mcpBinaryPath)' notify --title "Needs Attention" --subtitle '\(projectName)' --body "$TITLE"
+            # Re-check status after 30s — task may have resumed already
+            TITLE=$(/usr/bin/sqlite3 "$DB" "SELECT title FROM taskItems WHERE id = $TASK_ID AND status = 'in_progress' LIMIT 1;" 2>/dev/null)
+            [ -z "$TITLE" ] && exit 0
+
+            /usr/bin/sqlite3 "$DB" "UPDATE taskItems SET status = 'needs_attention' WHERE id = $TASK_ID AND status = 'in_progress';"
+            '\(mcpBinaryPath)' notify --title "Needs Attention" --subtitle '\(projectName)' --body "$TITLE"
+        ) &
         """
         try? script.write(to: scriptPath, atomically: true, encoding: .utf8)
         try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: scriptPath.path)
@@ -171,8 +180,10 @@ class AppState: ObservableObject {
         settings["hooks"] = [
             "Notification": needsAttentionHook,
             "Stop": needsAttentionHook,
-            "UserPromptSubmit": resumeHook
+            "UserPromptSubmit": resumeHook,
+            "PostToolUse": resumeHook
         ]
+
 
         // Write back
         if let jsonData = try? JSONSerialization.data(withJSONObject: settings, options: [.prettyPrinted, .sortedKeys]) {
