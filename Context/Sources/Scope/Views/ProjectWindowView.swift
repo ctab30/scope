@@ -25,7 +25,7 @@ struct ProjectWindowView: View {
     @State private var project: Project?
 
     var body: some View {
-        Group {
+        ZStack {
             if project != nil {
                 SeamlessSplitView2 {
                     TerminalTabView(projectPath: $projectPath, projectId: projectId)
@@ -53,7 +53,7 @@ struct ProjectWindowView: View {
         .preferredColorScheme(.dark)
         .background(.ultraThinMaterial)
         .ignoresSafeArea()
-        .background(WindowConfigurator(title: project?.name))
+        .background(TransparentWindowSetter(title: project?.name ?? "Project"))
         .onAppear {
             loadProject()
         }

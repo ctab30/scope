@@ -173,36 +173,22 @@ struct GUIPanelView: View {
 
                 Divider()
 
-                // Tab content — browser persists via ZStack, others switch normally
-                ZStack {
-                    // Browser always exists in the ZStack (hidden when not selected)
-                    BrowserView(viewModel: browserViewModel)
-                        .opacity(appState.selectedTab == .browser ? 1 : 0)
-                        .allowsHitTesting(appState.selectedTab == .browser)
+                // Tab content and Git Pane stacked vertically
+                SeamlessVSplitView2 {
+                    ZStack {
+                        // Browser always exists in the ZStack (hidden when not selected)
+                        BrowserView(viewModel: browserViewModel)
+                            .opacity(appState.selectedTab == .browser ? 1 : 0)
+                            .allowsHitTesting(appState.selectedTab == .browser)
 
-                    // Other tabs render on demand
-                    if appState.selectedTab != .browser {
-                        Group {
-                            switch appState.selectedTab {
-                            case .dashboard:
-                                DashboardView()
-                            case .sessions:
-                                SessionListView()
-                            case .tasks:
-                                KanbanBoard()
-                            case .notes:
-                                NoteListView()
-                            case .files:
-                                FileBrowserView()
-                            case .git:
-                                GitChangesView()
-                            case .browser:
-                                EmptyView() // Handled above in ZStack
-                            }
+                        // Other tabs render on demand
+                        if appState.selectedTab != .browser {
+                            tabContent
                         }
                     }
+                } bottom: {
+                    GitChangesView()
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
         .inspector(isPresented: $showChatDrawer) {
@@ -216,6 +202,24 @@ struct GUIPanelView: View {
         .onDisappear {
             mcpMonitor.stopPolling()
             browserCommandExecutor.stop()
+        }
+    }
+
+    @ViewBuilder
+    private var tabContent: some View {
+        switch appState.selectedTab {
+        case .dashboard:
+            DashboardView()
+        case .sessions:
+            SessionListView()
+        case .tasks:
+            KanbanBoard()
+        case .notes:
+            NoteListView()
+        case .files:
+            FileBrowserView()
+        case .browser:
+            EmptyView()
         }
     }
 

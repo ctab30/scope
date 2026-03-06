@@ -69,6 +69,7 @@ class GitChangesService: ObservableObject {
     @Published var untrackedFiles: [GitFileChange] = []
     @Published var recentCommits: [GitLogEntry] = []
     @Published var currentBranch: String = ""
+    @Published var branches: [String] = []
     @Published var isLoading: Bool = false
     @Published var isGitRepo: Bool = false
     @Published var selectedFileDiff: (file: GitFileChange, lines: [DiffLine])?
@@ -97,6 +98,10 @@ class GitChangesService: ObservableObject {
             GitChangesService.getCurrentBranch(at: path)
         }.value
 
+        let branchList = await Task.detached {
+            GitChangesService.getBranches(at: path)
+        }.value
+
         // Check if this is a git repo based on whether branch detection succeeded
         let isRepo = branchResult != nil
 
@@ -107,12 +112,14 @@ class GitChangesService: ObservableObject {
             self.untrackedFiles = statusResult.untracked
             self.recentCommits = logResult
             self.currentBranch = branchResult ?? ""
+            self.branches = branchList
         } else {
             self.stagedFiles = []
             self.unstagedFiles = []
             self.untrackedFiles = []
             self.recentCommits = []
             self.currentBranch = ""
+            self.branches = []
         }
         self.isLoading = false
     }
@@ -139,6 +146,14 @@ class GitChangesService: ObservableObject {
         guard let path = projectPath else { return }
         _ = Self.runGit(["restore", "--staged", "."], at: path)
         Task { await refresh() }
+    }
+
+    func checkout(branch: String) async {
+        guard let path = projectPath else { return }
+        _ = await Task.detached {
+            GitChangesService.runGit(["checkout", branch], at: path)
+        }.value
+        await refresh()
     }
 
     func commit(message: String) async -> Bool {
@@ -262,6 +277,16 @@ class GitChangesService: ObservableObject {
     nonisolated static func getCurrentBranch(at path: String) -> String? {
         return runGit(["rev-parse", "--abbrev-ref", "HEAD"], at: path)?
             .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    nonisolated static func getBranches(at path: String) -> [String] {
+        guard let output = runGit(["branch", "--format=%(refname:short)"], at: path) else {
+            return []
+        }
+        return output
+            .components(separatedBy: "\n")
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
     }
 
     @discardableResult

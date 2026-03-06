@@ -17,7 +17,6 @@ class AppState: ObservableObject {
         case notes = "Notes"
         case files = "Files"
         case browser = "Browser"
-        case git = "Git"
         case sessions = "Sessions"
         case dashboard = "Details"
 
@@ -27,7 +26,6 @@ class AppState: ObservableObject {
             case .notes: return "note.text"
             case .files: return "folder"
             case .browser: return "globe"
-            case .git: return "arrow.triangle.branch"
             case .sessions: return "clock"
             case .dashboard: return "info.circle"
             }

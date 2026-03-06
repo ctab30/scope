@@ -37,6 +37,18 @@ final class ClearDividerSplitView: NSSplitView {
     override var dividerColor: NSColor { .clear }
 
     override func drawDivider(in rect: NSRect) {}
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        self.wantsLayer = true
+        self.layer?.backgroundColor = .clear
+    }
+
+    required init?(coder: NSCoder) {
+        super.init(coder: coder)
+        self.wantsLayer = true
+        self.layer?.backgroundColor = .clear
+    }
 }
 
 // MARK: - 2-Pane Seamless Split View
@@ -96,20 +108,100 @@ final class SeamlessSplitVC2<L: View, T: View>: NSViewController, NSSplitViewDel
         super.viewDidLayout()
         guard !didSetInitialPositions,
               let splitView = view as? NSSplitView,
-              splitView.frame.width > 100 else { return }
+              splitView.frame.width > 200 else { return }
         didSetInitialPositions = true
-        // Start balanced — roughly equal split
-        splitView.setPosition(splitView.frame.width / 2, ofDividerAt: 0)
+        // Start balanced — exactly 50/50
+        let mid = splitView.frame.width / 2
+        DispatchQueue.main.async {
+            splitView.setPosition(mid, ofDividerAt: 0)
+        }
     }
 
     func splitView(_ splitView: NSSplitView, constrainMinCoordinate proposedMinimumPosition: CGFloat, ofSubviewAt dividerIndex: Int) -> CGFloat {
-        // Panel can't grow beyond 50/50 — divider stays at or right of center
-        return splitView.frame.width / 2
+        // Allow panels to shrink to 350
+        return 350
     }
 
     func splitView(_ splitView: NSSplitView, constrainMaxCoordinate proposedMaximumPosition: CGFloat, ofSubviewAt dividerIndex: Int) -> CGFloat {
-        // Panel min width 550
-        return splitView.frame.width - 550
+        // Allow panels to shrink to 350
+        return splitView.frame.width - 350
+    }
+}
+
+// MARK: - 2-Pane Vertical (Top/Bottom) Seamless Split View
+
+struct SeamlessVSplitView2<Top: View, Bottom: View>: NSViewControllerRepresentable {
+    let top: Top
+    let bottom: Bottom
+
+    init(
+        @ViewBuilder top: () -> Top,
+        @ViewBuilder bottom: () -> Bottom
+    ) {
+        self.top = top()
+        self.bottom = bottom()
+    }
+
+    func makeNSViewController(context: Context) -> SeamlessVSplitVC2<Top, Bottom> {
+        SeamlessVSplitVC2(top: top, bottom: bottom)
+    }
+
+    func updateNSViewController(_ controller: SeamlessVSplitVC2<Top, Bottom>, context: Context) {}
+}
+
+final class SeamlessVSplitVC2<T: View, B: View>: NSViewController, NSSplitViewDelegate {
+    private let topContent: T
+    private let bottomContent: B
+    private var didSetInitialPositions = false
+
+    init(top: T, bottom: B) {
+        self.topContent = top
+        self.bottomContent = bottom
+        super.init(nibName: nil, bundle: nil)
+    }
+
+    required init?(coder: NSCoder) { fatalError() }
+
+    override func loadView() {
+        let splitView = ClearDividerSplitView()
+        splitView.isVertical = false // horizontal divider = top/bottom layout
+        splitView.delegate = self
+
+        let topHost = NSHostingView(rootView: topContent)
+        let bottomHost = NSHostingView(rootView: bottomContent)
+
+        for host in [topHost, bottomHost] {
+            host.translatesAutoresizingMaskIntoConstraints = true
+            host.autoresizingMask = [.width, .height]
+        }
+
+        splitView.addSubview(topHost)
+        splitView.addSubview(bottomHost)
+
+        self.view = splitView
+    }
+
+    override func viewDidLayout() {
+        super.viewDidLayout()
+        guard !didSetInitialPositions,
+              let splitView = view as? NSSplitView,
+              splitView.frame.height > 200 else { return }
+        didSetInitialPositions = true
+        // Start precisely balanced
+        let mid = splitView.frame.height / 2
+        DispatchQueue.main.async {
+            splitView.setPosition(mid, ofDividerAt: 0)
+        }
+    }
+
+    func splitView(_ splitView: NSSplitView, constrainMinCoordinate proposedMinimumPosition: CGFloat, ofSubviewAt dividerIndex: Int) -> CGFloat {
+        // Top pane min height 150
+        return 150
+    }
+
+    func splitView(_ splitView: NSSplitView, constrainMaxCoordinate proposedMaximumPosition: CGFloat, ofSubviewAt dividerIndex: Int) -> CGFloat {
+        // Bottom pane min height 150
+        return splitView.frame.height - 150
     }
 }
 
@@ -244,35 +336,52 @@ struct TransparentWindowSetter: NSViewRepresentable {
     func makeNSView(context: Context) -> NSView {
         let view = NSView()
         let windowTitle = title
+        context.coordinator.title = title
         DispatchQueue.main.async {
-            guard let window = view.window else { return }
-            Self.makeTransparent(window)
-            window.title = windowTitle
-            context.coordinator.observeFullScreen(window: window)
-            context.coordinator.keepTitle(window: window, title: windowTitle)
+            self.setupWindow(for: view, context: context)
+        }
+        // Retry logic in case window isn't ready immediately
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            self.setupWindow(for: view, context: context)
         }
         return view
     }
 
-    func updateNSView(_ nsView: NSView, context: Context) {}
+    func updateNSView(_ nsView: NSView, context: Context) {
+        context.coordinator.title = title
+        if let window = nsView.window {
+            window.title = title
+        }
+    }
+
+    private func setupWindow(for view: NSView, context: Context) {
+        guard let window = view.window else { return }
+        Self.makeTransparent(window)
+        window.title = title
+        context.coordinator.observeFullScreen(window: window)
+        context.coordinator.keepTitle(window: window)
+    }
 
     private static func makeTransparent(_ window: NSWindow) {
-        window.backgroundColor = .clear
         window.isOpaque = false
+        window.backgroundColor = .clear
+        window.styleMask.insert(.fullSizeContentView)
         window.titlebarAppearsTransparent = true
         window.titlebarSeparatorStyle = .none
+        window.isMovableByWindowBackground = true
+        window.hasShadow = true
     }
 
     final class Coordinator: NSObject {
+        var title: String = ""
         private var observers: [NSObjectProtocol] = []
-
         private var titleObservation: NSKeyValueObservation?
 
-        /// KVO on window.title — reset to "Workspace" whenever SwiftUI changes it
-        func keepTitle(window: NSWindow, title: String) {
-            titleObservation = window.observe(\.title, options: [.new]) { w, change in
-                if let newTitle = change.newValue, newTitle != title {
-                    DispatchQueue.main.async { w.title = title }
+        func keepTitle(window: NSWindow) {
+            titleObservation = window.observe(\.title, options: [.new]) { [weak self] w, change in
+                guard let self = self else { return }
+                if let newTitle = change.newValue, newTitle != self.title {
+                    DispatchQueue.main.async { w.title = self.title }
                 }
             }
         }

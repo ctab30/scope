@@ -272,10 +272,34 @@ struct GitChangesView: View {
                 .font(ScopeTheme.Font.footnoteMedium)
                 .foregroundColor(.secondary)
 
-            Text(gitService.currentBranch)
-                .font(ScopeTheme.Font.mono)
-                .foregroundColor(.primary)
-                .lineLimit(1)
+            Menu {
+                ForEach(gitService.branches, id: \.self) { branch in
+                    Button {
+                        Task { await gitService.checkout(branch: branch) }
+                    } label: {
+                        HStack {
+                            Text(branch)
+                            if branch == gitService.currentBranch {
+                                Image(systemName: "checkmark")
+                            }
+                        }
+                    }
+                    .disabled(branch == gitService.currentBranch)
+                }
+            } label: {
+                HStack(spacing: ScopeTheme.Spacing.xxs) {
+                    Text(gitService.currentBranch)
+                        .font(ScopeTheme.Font.mono)
+                        .foregroundColor(.primary)
+                        .lineLimit(1)
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 8, weight: .semibold))
+                        .foregroundColor(.secondary)
+                }
+            }
+            .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
+            .fixedSize()
 
             let totalChanges = gitService.stagedFiles.count + gitService.unstagedFiles.count + gitService.untrackedFiles.count
             if totalChanges > 0 {

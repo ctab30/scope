@@ -3,11 +3,10 @@ import GRDB
 
 struct HomeView: View {
     var body: some View {
-        VSplitView {
+        SeamlessVSplitView2 {
             KanbanBoard(globalMode: true)
-                .frame(minHeight: 200)
+        } bottom: {
             ProjectTaskSummary()
-                .frame(minHeight: 150)
         }
     }
 }
