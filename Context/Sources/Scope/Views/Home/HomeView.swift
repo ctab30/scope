@@ -35,6 +35,8 @@ struct ProjectTaskSummary: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
+            Divider()
+            
             // Header
             HStack {
                 Text("Active Tasks by Project")

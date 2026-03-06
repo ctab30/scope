@@ -184,8 +184,16 @@ struct GUIPanelView: View {
                         // Other tabs render on demand
                         if appState.selectedTab != .browser {
                             tabContent
+                                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        }
+                        
+                        // Bottom border for the top pane (the line above Git)
+                        VStack {
+                            Spacer()
+                            Divider()
                         }
                     }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } bottom: {
                     GitChangesView()
                 }

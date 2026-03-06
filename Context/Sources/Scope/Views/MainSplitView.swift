@@ -69,37 +69,69 @@ struct SeamlessSplitView2<Leading: View, Trailing: View>: NSViewControllerRepres
         SeamlessSplitVC2(leading: leading, trailing: trailing)
     }
 
-    func updateNSViewController(_ controller: SeamlessSplitVC2<Leading, Trailing>, context: Context) {}
+    @EnvironmentObject var appState: AppState
+    @EnvironmentObject var settings: AppSettings
+    @EnvironmentObject var liveMonitor: LiveSessionMonitor
+    @EnvironmentObject var githubService: GitHubService
+    @EnvironmentObject var contextEngine: ContextEngine
+    @EnvironmentObject var devEnvironment: DevEnvironment
+    @EnvironmentObject var projectAnalyzer: ProjectAnalyzer
+    @EnvironmentObject var claudeService: ClaudeService
+
+    func updateNSViewController(_ controller: SeamlessSplitVC2<Leading, Trailing>, context: Context) {
+        let env = { (v: AnyView) -> AnyView in
+            AnyView(v
+                .environmentObject(self.appState)
+                .environmentObject(self.settings)
+                .environmentObject(self.liveMonitor)
+                .environmentObject(self.githubService)
+                .environmentObject(self.contextEngine)
+                .environmentObject(self.devEnvironment)
+                .environmentObject(self.projectAnalyzer)
+                .environmentObject(self.claudeService))
+        }
+        controller.update(
+            leading: env(AnyView(leading)),
+            trailing: env(AnyView(trailing))
+        )
+    }
 }
 
 final class SeamlessSplitVC2<L: View, T: View>: NSViewController, NSSplitViewDelegate {
-    private let leadingContent: L
-    private let trailingContent: T
+    private var leadingController: NSHostingController<AnyView>?
+    private var trailingController: NSHostingController<AnyView>?
     private var didSetInitialPositions = false
 
     init(leading: L, trailing: T) {
-        self.leadingContent = leading
-        self.trailingContent = trailing
         super.init(nibName: nil, bundle: nil)
+        self.leadingController = NSHostingController(rootView: AnyView(leading))
+        self.trailingController = NSHostingController(rootView: AnyView(trailing))
     }
 
     required init?(coder: NSCoder) { fatalError() }
+
+    func update<LV: View, TV: View>(leading: LV, trailing: TV) {
+        leadingController?.rootView = AnyView(leading)
+        trailingController?.rootView = AnyView(trailing)
+    }
 
     override func loadView() {
         let splitView = ClearDividerSplitView()
         splitView.isVertical = true
         splitView.delegate = self
 
-        let leadingHost = NSHostingView(rootView: leadingContent)
-        let trailingHost = NSHostingView(rootView: trailingContent)
-
-        for host in [leadingHost, trailingHost] {
-            host.translatesAutoresizingMaskIntoConstraints = true
-            host.autoresizingMask = [.width, .height]
+        if let leadingController, let trailingController {
+            addChild(leadingController)
+            addChild(trailingController)
+            
+            leadingController.view.translatesAutoresizingMaskIntoConstraints = true
+            leadingController.view.autoresizingMask = [.width, .height]
+            trailingController.view.translatesAutoresizingMaskIntoConstraints = true
+            trailingController.view.autoresizingMask = [.width, .height]
+            
+            splitView.addSubview(leadingController.view)
+            splitView.addSubview(trailingController.view)
         }
-
-        splitView.addSubview(leadingHost)
-        splitView.addSubview(trailingHost)
 
         self.view = splitView
     }
@@ -108,22 +140,22 @@ final class SeamlessSplitVC2<L: View, T: View>: NSViewController, NSSplitViewDel
         super.viewDidLayout()
         guard !didSetInitialPositions,
               let splitView = view as? NSSplitView,
-              splitView.frame.width > 200 else { return }
+              splitView.frame.width > 800 else { return } // Wait until mostly expanded
+        
         didSetInitialPositions = true
-        // Start balanced — exactly 50/50
         let mid = splitView.frame.width / 2
-        DispatchQueue.main.async {
-            splitView.setPosition(mid, ofDividerAt: 0)
-        }
+        splitView.setPosition(mid, ofDividerAt: 0)
+    }
+
+    func splitView(_ splitView: NSSplitView, holdingPriorityForSubviewAt subviewIndex: Int) -> NSLayoutConstraint.Priority {
+        return .defaultLow
     }
 
     func splitView(_ splitView: NSSplitView, constrainMinCoordinate proposedMinimumPosition: CGFloat, ofSubviewAt dividerIndex: Int) -> CGFloat {
-        // Allow panels to shrink to 350
         return 350
     }
 
     func splitView(_ splitView: NSSplitView, constrainMaxCoordinate proposedMaximumPosition: CGFloat, ofSubviewAt dividerIndex: Int) -> CGFloat {
-        // Allow panels to shrink to 350
         return splitView.frame.width - 350
     }
 }
@@ -134,49 +166,78 @@ struct SeamlessVSplitView2<Top: View, Bottom: View>: NSViewControllerRepresentab
     let top: Top
     let bottom: Bottom
 
-    init(
-        @ViewBuilder top: () -> Top,
-        @ViewBuilder bottom: () -> Bottom
-    ) {
+    init(@ViewBuilder top: () -> Top, @ViewBuilder bottom: () -> Bottom) {
         self.top = top()
         self.bottom = bottom()
     }
+
+    @EnvironmentObject var appState: AppState
+    @EnvironmentObject var settings: AppSettings
+    @EnvironmentObject var liveMonitor: LiveSessionMonitor
+    @EnvironmentObject var githubService: GitHubService
+    @EnvironmentObject var contextEngine: ContextEngine
+    @EnvironmentObject var devEnvironment: DevEnvironment
+    @EnvironmentObject var projectAnalyzer: ProjectAnalyzer
+    @EnvironmentObject var claudeService: ClaudeService
 
     func makeNSViewController(context: Context) -> SeamlessVSplitVC2<Top, Bottom> {
         SeamlessVSplitVC2(top: top, bottom: bottom)
     }
 
-    func updateNSViewController(_ controller: SeamlessVSplitVC2<Top, Bottom>, context: Context) {}
+    func updateNSViewController(_ controller: SeamlessVSplitVC2<Top, Bottom>, context: Context) {
+        let env = { (v: AnyView) -> AnyView in
+            AnyView(v
+                .environmentObject(appState)
+                .environmentObject(settings)
+                .environmentObject(liveMonitor)
+                .environmentObject(githubService)
+                .environmentObject(contextEngine)
+                .environmentObject(devEnvironment)
+                .environmentObject(projectAnalyzer)
+                .environmentObject(claudeService))
+        }
+        controller.update(
+            top: env(AnyView(top)),
+            bottom: env(AnyView(bottom))
+        )
+    }
 }
 
 final class SeamlessVSplitVC2<T: View, B: View>: NSViewController, NSSplitViewDelegate {
-    private let topContent: T
-    private let bottomContent: B
+    private var topController: NSHostingController<AnyView>?
+    private var bottomController: NSHostingController<AnyView>?
     private var didSetInitialPositions = false
 
     init(top: T, bottom: B) {
-        self.topContent = top
-        self.bottomContent = bottom
         super.init(nibName: nil, bundle: nil)
+        self.topController = NSHostingController(rootView: AnyView(top))
+        self.bottomController = NSHostingController(rootView: AnyView(bottom))
     }
 
     required init?(coder: NSCoder) { fatalError() }
 
+    func update<TV: View, BV: View>(top: TV, bottom: BV) {
+        topController?.rootView = AnyView(top)
+        bottomController?.rootView = AnyView(bottom)
+    }
+
     override func loadView() {
         let splitView = ClearDividerSplitView()
-        splitView.isVertical = false // horizontal divider = top/bottom layout
+        splitView.isVertical = false
         splitView.delegate = self
 
-        let topHost = NSHostingView(rootView: topContent)
-        let bottomHost = NSHostingView(rootView: bottomContent)
-
-        for host in [topHost, bottomHost] {
-            host.translatesAutoresizingMaskIntoConstraints = true
-            host.autoresizingMask = [.width, .height]
+        if let topController, let bottomController {
+            addChild(topController)
+            addChild(bottomController)
+            
+            topController.view.translatesAutoresizingMaskIntoConstraints = true
+            topController.view.autoresizingMask = [.width, .height]
+            bottomController.view.translatesAutoresizingMaskIntoConstraints = true
+            bottomController.view.autoresizingMask = [.width, .height]
+            
+            splitView.addSubview(topController.view)
+            splitView.addSubview(bottomController.view)
         }
-
-        splitView.addSubview(topHost)
-        splitView.addSubview(bottomHost)
 
         self.view = splitView
     }
@@ -185,23 +246,23 @@ final class SeamlessVSplitVC2<T: View, B: View>: NSViewController, NSSplitViewDe
         super.viewDidLayout()
         guard !didSetInitialPositions,
               let splitView = view as? NSSplitView,
-              splitView.frame.height > 200 else { return }
+              splitView.frame.height > 600 else { return } // Wait until mostly open
+        
         didSetInitialPositions = true
-        // Start precisely balanced
         let mid = splitView.frame.height / 2
-        DispatchQueue.main.async {
-            splitView.setPosition(mid, ofDividerAt: 0)
-        }
+        splitView.setPosition(mid, ofDividerAt: 0)
+    }
+
+    func splitView(_ splitView: NSSplitView, holdingPriorityForSubviewAt subviewIndex: Int) -> NSLayoutConstraint.Priority {
+        return .defaultLow
     }
 
     func splitView(_ splitView: NSSplitView, constrainMinCoordinate proposedMinimumPosition: CGFloat, ofSubviewAt dividerIndex: Int) -> CGFloat {
-        // Top pane min height 150
-        return 150
+        return 200
     }
 
     func splitView(_ splitView: NSSplitView, constrainMaxCoordinate proposedMaximumPosition: CGFloat, ofSubviewAt dividerIndex: Int) -> CGFloat {
-        // Bottom pane min height 150
-        return splitView.frame.height - 150
+        return splitView.frame.height - 200
     }
 }
 
@@ -226,41 +287,72 @@ struct SeamlessSplitView3<Leading: View, Center: View, Trailing: View>: NSViewCo
         SeamlessSplitVC3(leading: leading, center: center, trailing: trailing)
     }
 
-    func updateNSViewController(_ controller: SeamlessSplitVC3<Leading, Center, Trailing>, context: Context) {}
+    @EnvironmentObject var appState: AppState
+    @EnvironmentObject var settings: AppSettings
+    @EnvironmentObject var liveMonitor: LiveSessionMonitor
+    @EnvironmentObject var githubService: GitHubService
+    @EnvironmentObject var contextEngine: ContextEngine
+    @EnvironmentObject var devEnvironment: DevEnvironment
+    @EnvironmentObject var projectAnalyzer: ProjectAnalyzer
+    @EnvironmentObject var claudeService: ClaudeService
+
+    func updateNSViewController(_ controller: SeamlessSplitVC3<Leading, Center, Trailing>, context: Context) {
+        let env = { (v: AnyView) -> AnyView in
+            AnyView(v
+                .environmentObject(appState)
+                .environmentObject(settings)
+                .environmentObject(liveMonitor)
+                .environmentObject(githubService)
+                .environmentObject(contextEngine)
+                .environmentObject(devEnvironment)
+                .environmentObject(projectAnalyzer)
+                .environmentObject(claudeService))
+        }
+        controller.update(
+            leading: env(AnyView(leading)),
+            center: env(AnyView(center)),
+            trailing: env(AnyView(trailing))
+        )
+    }
 }
 
 final class SeamlessSplitVC3<L: View, C: View, T: View>: NSViewController, NSSplitViewDelegate {
-    private let leadingContent: L
-    private let centerContent: C
-    private let trailingContent: T
+    private var leadingController: NSHostingController<AnyView>?
+    private var centerController: NSHostingController<AnyView>?
+    private var trailingController: NSHostingController<AnyView>?
     private var didSetInitialPositions = false
 
     init(leading: L, center: C, trailing: T) {
-        self.leadingContent = leading
-        self.centerContent = center
-        self.trailingContent = trailing
         super.init(nibName: nil, bundle: nil)
+        self.leadingController = NSHostingController(rootView: AnyView(leading))
+        self.centerController = NSHostingController(rootView: AnyView(center))
+        self.trailingController = NSHostingController(rootView: AnyView(trailing))
     }
 
     required init?(coder: NSCoder) { fatalError() }
+
+    func update<LV: View, CV: View, TV: View>(leading: LV, center: CV, trailing: TV) {
+        leadingController?.rootView = AnyView(leading)
+        centerController?.rootView = AnyView(center)
+        trailingController?.rootView = AnyView(trailing)
+    }
 
     override func loadView() {
         let splitView = ClearDividerSplitView()
         splitView.isVertical = true
         splitView.delegate = self
 
-        let leadingHost = NSHostingView(rootView: leadingContent)
-        let centerHost = NSHostingView(rootView: centerContent)
-        let trailingHost = NSHostingView(rootView: trailingContent)
-
-        for host in [leadingHost, centerHost, trailingHost] {
-            host.translatesAutoresizingMaskIntoConstraints = true
-            host.autoresizingMask = [.width, .height]
+        if let leadingController, let centerController, let trailingController {
+            addChild(leadingController)
+            addChild(centerController)
+            addChild(trailingController)
+            
+            for controller in [leadingController, centerController, trailingController] {
+                controller.view.translatesAutoresizingMaskIntoConstraints = true
+                controller.view.autoresizingMask = [.width, .height]
+                splitView.addSubview(controller.view)
+            }
         }
-
-        splitView.addSubview(leadingHost)
-        splitView.addSubview(centerHost)
-        splitView.addSubview(trailingHost)
 
         self.view = splitView
     }
@@ -269,16 +361,19 @@ final class SeamlessSplitVC3<L: View, C: View, T: View>: NSViewController, NSSpl
         super.viewDidLayout()
         guard !didSetInitialPositions,
               let splitView = view as? NSSplitView,
-              splitView.frame.width > 100 else { return }
+              splitView.frame.width > 300 else { return }
+        
         didSetInitialPositions = true
-        // Three equal columns
         let third = splitView.frame.width / 3
         splitView.setPosition(third, ofDividerAt: 0)
         splitView.setPosition(third * 2, ofDividerAt: 1)
     }
 
+    func splitView(_ splitView: NSSplitView, holdingPriorityForSubviewAt subviewIndex: Int) -> NSLayoutConstraint.Priority {
+        return .defaultLow
+    }
+
     func splitView(_ splitView: NSSplitView, constrainMinCoordinate proposedMinimumPosition: CGFloat, ofSubviewAt dividerIndex: Int) -> CGFloat {
-        let width = splitView.frame.width
         if dividerIndex == 0 {
             // Terminal min width ~300
             return 300
@@ -335,7 +430,6 @@ struct TransparentWindowSetter: NSViewRepresentable {
 
     func makeNSView(context: Context) -> NSView {
         let view = NSView()
-        let windowTitle = title
         context.coordinator.title = title
         DispatchQueue.main.async {
             self.setupWindow(for: view, context: context)
@@ -365,7 +459,10 @@ struct TransparentWindowSetter: NSViewRepresentable {
     private static func makeTransparent(_ window: NSWindow) {
         window.isOpaque = false
         window.backgroundColor = .clear
-        window.styleMask.insert(.fullSizeContentView)
+        // Add fullSizeContentView to styleMask if not present
+        if !window.styleMask.contains(.fullSizeContentView) {
+            window.styleMask.insert(.fullSizeContentView)
+        }
         window.titlebarAppearsTransparent = true
         window.titlebarSeparatorStyle = .none
         window.isMovableByWindowBackground = true

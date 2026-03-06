@@ -301,16 +301,6 @@ struct GitChangesView: View {
             .menuIndicator(.hidden)
             .fixedSize()
 
-            let totalChanges = gitService.stagedFiles.count + gitService.unstagedFiles.count + gitService.untrackedFiles.count
-            if totalChanges > 0 {
-                Text("\(totalChanges)")
-                    .font(ScopeTheme.Font.caption)
-                    .foregroundColor(.white)
-                    .padding(.horizontal, ScopeTheme.Spacing.xs)
-                    .padding(.vertical, 1)
-                    .background(RoundedRectangle(cornerRadius: 4).fill(Color.white))
-            }
-
             Spacer()
 
             if gitService.isLoading {
