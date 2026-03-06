@@ -296,7 +296,7 @@ struct ScopeApp: App {
                 ProjectWindowView(projectId: projectId)
             }
         }
-        .defaultSize(width: 1200, height: 850)
+        .defaultSize(width: 1400, height: 900)
 
         Settings {
             SettingsView(settings: appSettings)

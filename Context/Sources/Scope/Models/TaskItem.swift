@@ -73,7 +73,7 @@ struct TaskItem: Codable, Identifiable, FetchableRecord, MutablePersistableRecor
 
     // MARK: - Labels
 
-    static let predefinedLabels = ["bug", "feature", "refactor", "test", "docs", "performance", "security", "design", "email", "calendar"]
+    static let predefinedLabels = ["bug", "feature", "hotfix", "refactor", "test", "docs", "performance", "security", "design", "devops"]
 
     var labelsArray: [String] {
         guard let json = labels,
@@ -130,14 +130,14 @@ struct TaskItem: Codable, Identifiable, FetchableRecord, MutablePersistableRecor
         switch label {
         case "bug":         return .red
         case "feature":     return .blue
+        case "hotfix":      return .orange
         case "refactor":    return .purple
         case "test":        return .green
         case "docs":        return .mint
-        case "performance": return .white
+        case "performance": return .yellow
         case "security":    return .pink
         case "design":      return .cyan
-        case "email":       return .green
-        case "calendar":    return .indigo
+        case "devops":      return .indigo
         default:            return .secondary
         }
     }

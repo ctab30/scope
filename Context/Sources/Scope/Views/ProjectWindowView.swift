@@ -35,7 +35,7 @@ struct ProjectWindowView: View {
             } else {
                 VStack {
                     ProgressView()
-                    Text("Loading project…")
+                    Text("Loading project\u{2026}")
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }

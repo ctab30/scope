@@ -343,123 +343,315 @@ struct NewTaskSheet: View {
     let onCreate: (TaskItem) -> Void
 
     @EnvironmentObject var appState: AppState
+    @EnvironmentObject var settings: AppSettings
 
     @State private var title: String = ""
     @State private var description: String = ""
     @State private var priority: Int = 0
     @State private var selectedLabels: Set<String> = []
+    @State private var customLabel: String = ""
+    @State private var selectedProjectId: String = ""
+    @State private var attachedImages: [String] = []
+    @State private var isDropTargeted = false
+    private let selectedStatus: String = "todo"
 
     var body: some View {
-        VStack(spacing: ScopeTheme.Spacing.lg) {
-            Text("New Task")
-                .font(ScopeTheme.Font.headline)
-
-            VStack(alignment: .leading, spacing: ScopeTheme.Spacing.md) {
-                TextField("Task title", text: $title)
-                    .textFieldStyle(.roundedBorder)
-                    .font(ScopeTheme.Font.body)
-
-                // Description
-                TextEditor(text: $description)
-                    .font(ScopeTheme.Font.footnote)
-                    .scrollContentBackground(.hidden)
-                    .padding(ScopeTheme.Spacing.xs)
-                    .frame(height: 80)
-                    .background(
-                        RoundedRectangle(cornerRadius: 4, style: .continuous)
-                            .fill(ScopeTheme.Colors.textBg.opacity(0.3))
-                    )
-
-                // Priority
-                HStack(spacing: ScopeTheme.Spacing.xxs) {
-                    Text("Priority:")
-                        .font(ScopeTheme.Font.footnoteMedium)
-                        .foregroundColor(.secondary)
-                    ForEach(TaskItem.Priority.allCases, id: \.rawValue) { level in
-                        Button {
-                            priority = level.rawValue
-                        } label: {
-                            Text(level.label)
-                                .font(ScopeTheme.Font.caption)
-                                .padding(.horizontal, ScopeTheme.Spacing.sm)
-                                .padding(.vertical, 3)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 4)
-                                        .fill(priority == level.rawValue
-                                              ? level.color.opacity(0.15)
-                                              : Color.clear)
-                                )
-                                .foregroundColor(priority == level.rawValue ? level.color : .secondary)
-                        }
-                        .buttonStyle(.plain)
-                    }
+        VStack(spacing: 0) {
+            // Header
+            HStack {
+                Text("New Task")
+                    .font(.headline)
+                Spacer()
+                Button { isPresented = false } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 18))
+                        .foregroundStyle(.tertiary)
                 }
-
-                // Labels
-                HStack(spacing: ScopeTheme.Spacing.xxs) {
-                    Text("Labels:")
-                        .font(ScopeTheme.Font.footnoteMedium)
-                        .foregroundColor(.secondary)
-                    ForEach(TaskItem.predefinedLabels.prefix(6), id: \.self) { label in
-                        Button {
-                            if selectedLabels.contains(label) {
-                                selectedLabels.remove(label)
-                            } else {
-                                selectedLabels.insert(label)
-                            }
-                        } label: {
-                            Text(label)
-                                .font(ScopeTheme.Font.tag)
-                                .textCase(.uppercase)
-                                .padding(.horizontal, ScopeTheme.Spacing.xs)
-                                .padding(.vertical, ScopeTheme.Spacing.xxxs)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 4)
-                                        .fill(selectedLabels.contains(label)
-                                              ? TaskItem.labelColor(for: label).opacity(0.15)
-                                              : ScopeTheme.Colors.separator.opacity(ScopeTheme.Opacity.badge))
-                                )
-                                .foregroundColor(selectedLabels.contains(label)
-                                                 ? TaskItem.labelColor(for: label)
-                                                 : .secondary)
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
+                .buttonStyle(.plain)
             }
-            .frame(width: 400)
+            .padding(.horizontal, 20)
+            .padding(.vertical, 16)
 
-            HStack(spacing: ScopeTheme.Spacing.md) {
-                Button("Cancel") {
-                    isPresented = false
-                }
-                .keyboardShortcut(.cancelAction)
+            Divider()
 
-                Button("Create") {
-                    if !title.trimmingCharacters(in: .whitespaces).isEmpty {
-                        var task = TaskItem(
-                            id: nil,
-                            projectId: appState.currentProject?.id ?? "__global__",
-                            title: title.trimmingCharacters(in: .whitespaces),
-                            description: description.isEmpty ? nil : description,
-                            status: "todo",
-                            priority: priority,
-                            sourceSession: nil,
-                            source: "manual",
-                            createdAt: Date(),
-                            completedAt: nil,
-                            labels: nil,
-                            attachments: nil
-                        )
-                        task.setLabels(Array(selectedLabels).sorted())
-                        onCreate(task)
-                        isPresented = false
+            ScrollView {
+                VStack(alignment: .leading, spacing: 20) {
+                    // Title
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Title")
+                            .font(.subheadline.weight(.medium))
+                            .foregroundColor(.secondary)
+                        TextField("What needs to be done?", text: $title)
+                            .textFieldStyle(.roundedBorder)
                     }
+
+                    // Project
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Project")
+                            .font(.subheadline.weight(.medium))
+                            .foregroundColor(.secondary)
+                        Picker("Project", selection: $selectedProjectId) {
+                            ForEach(appState.projects.filter { $0.id != "__global__" }) { project in
+                                Text(settings.demoMode ? DemoContent.shared.mask(project.name, as: .project) : project.name)
+                                    .tag(project.id)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                        .labelsHidden()
+                    }
+
+                    // Description
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Description")
+                            .font(.subheadline.weight(.medium))
+                            .foregroundColor(.secondary)
+                        TextEditor(text: $description)
+                            .font(.body)
+                            .scrollContentBackground(.hidden)
+                            .padding(8)
+                            .frame(minHeight: 100)
+                            .background(
+                                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                    .fill(.quaternary.opacity(0.5))
+                            )
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                    .strokeBorder(.quaternary, lineWidth: 0.5)
+                            )
+                    }
+
+                    // Priority
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Priority")
+                            .font(.subheadline.weight(.medium))
+                            .foregroundColor(.secondary)
+                        Picker("Priority", selection: $priority) {
+                            ForEach(TaskItem.Priority.allCases, id: \.rawValue) { level in
+                                Text(level.label).tag(level.rawValue)
+                            }
+                        }
+                        .pickerStyle(.segmented)
+                        .labelsHidden()
+                    }
+
+                    // Labels
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Labels")
+                            .font(.subheadline.weight(.medium))
+                            .foregroundColor(.secondary)
+
+                        FlowLayout(spacing: 6) {
+                            ForEach(TaskItem.predefinedLabels, id: \.self) { label in
+                                LabelChip(
+                                    label: label,
+                                    isSelected: selectedLabels.contains(label),
+                                    color: TaskItem.labelColor(for: label)
+                                ) {
+                                    if selectedLabels.contains(label) {
+                                        selectedLabels.remove(label)
+                                    } else {
+                                        selectedLabels.insert(label)
+                                    }
+                                }
+                            }
+                        }
+
+                        // Custom label
+                        HStack(spacing: 8) {
+                            TextField("Custom label", text: $customLabel)
+                                .textFieldStyle(.roundedBorder)
+                                .font(.footnote)
+                                .frame(width: 150)
+                                .onSubmit { addCustomLabel() }
+
+                            Button("Add") { addCustomLabel() }
+                                .font(.footnote)
+                                .disabled(customLabel.trimmingCharacters(in: .whitespaces).isEmpty)
+                        }
+
+                        // Custom selected labels
+                        let customSelected = selectedLabels.filter { !TaskItem.predefinedLabels.contains($0) }
+                        if !customSelected.isEmpty {
+                            HStack(spacing: 4) {
+                                ForEach(Array(customSelected).sorted(), id: \.self) { label in
+                                    LabelChip(label: label, isSelected: true, color: .secondary) {
+                                        selectedLabels.remove(label)
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Attachments
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack {
+                            Text("Attachments")
+                                .font(.subheadline.weight(.medium))
+                                .foregroundColor(.secondary)
+                            Spacer()
+                            Button {
+                                pickImages()
+                            } label: {
+                                HStack(spacing: 2) {
+                                    Image(systemName: "plus")
+                                        .font(.system(size: 9, weight: .bold))
+                                    Text("Add Image")
+                                        .font(.caption)
+                                }
+                                .foregroundColor(.accentColor)
+                            }
+                            .buttonStyle(.plain)
+                        }
+
+                        ZStack {
+                            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                .fill(isDropTargeted
+                                      ? Color.accentColor.opacity(0.1)
+                                      : Color.secondary.opacity(0.1))
+                            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                .strokeBorder(
+                                    style: StrokeStyle(lineWidth: 1, dash: [5, 3])
+                                )
+                                .foregroundColor(isDropTargeted ? .accentColor : .secondary.opacity(0.3))
+
+                            if attachedImages.isEmpty {
+                                VStack(spacing: 4) {
+                                    Image(systemName: "photo.on.rectangle.angled")
+                                        .font(.system(size: 16))
+                                        .foregroundStyle(.tertiary)
+                                    Text("Drop images here")
+                                        .font(.caption)
+                                        .foregroundStyle(.tertiary)
+                                }
+                            } else {
+                                ScrollView(.horizontal, showsIndicators: false) {
+                                    HStack(spacing: 8) {
+                                        ForEach(attachedImages, id: \.self) { path in
+                                            AttachmentThumbnail(path: path) {
+                                                attachedImages.removeAll { $0 == path }
+                                            }
+                                        }
+                                    }
+                                    .padding(8)
+                                }
+                            }
+                        }
+                        .frame(height: attachedImages.isEmpty ? 60 : 80)
+                        .onDrop(of: [.fileURL, .image], isTargeted: $isDropTargeted) { providers in
+                            handleDrop(providers)
+                        }
+                    }
+                }
+                .padding(20)
+            }
+
+            Divider()
+
+            // Bottom bar
+            HStack {
+                Spacer()
+                Button("Cancel") { isPresented = false }
+                    .keyboardShortcut(.cancelAction)
+
+                Button("Create Task") {
+                    createTask()
                 }
                 .keyboardShortcut(.defaultAction)
+                .buttonStyle(.borderedProminent)
                 .disabled(title.trimmingCharacters(in: .whitespaces).isEmpty)
             }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 12)
         }
-        .padding(ScopeTheme.Spacing.xxl)
+        .frame(width: 480, height: 720)
+        .onAppear {
+            selectedProjectId = appState.currentProject?.id ?? appState.projects.first?.id ?? "__global__"
+        }
+    }
+
+    private func createTask() {
+        guard !title.trimmingCharacters(in: .whitespaces).isEmpty else { return }
+        var task = TaskItem(
+            id: nil,
+            projectId: selectedProjectId,
+            title: title.trimmingCharacters(in: .whitespaces),
+            description: description.isEmpty ? nil : description,
+            status: selectedStatus,
+            priority: priority,
+            sourceSession: nil,
+            source: "manual",
+            createdAt: Date(),
+            completedAt: nil,
+            labels: nil,
+            attachments: nil
+        )
+        task.setLabels(Array(selectedLabels).sorted())
+        if !attachedImages.isEmpty {
+            task.setAttachments(attachedImages)
+        }
+        onCreate(task)
+        isPresented = false
+    }
+
+    private func handleDrop(_ providers: [NSItemProvider]) -> Bool {
+        var handled = false
+        for provider in providers {
+            if provider.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier) {
+                provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier, options: nil) { data, _ in
+                    guard let data = data as? Data,
+                          let url = URL(dataRepresentation: data, relativeTo: nil) else { return }
+                    let ext = url.pathExtension.lowercased()
+                    let imageExts = ["png", "jpg", "jpeg", "gif", "webp", "bmp", "tiff", "heic"]
+                    guard imageExts.contains(ext) else { return }
+                    DispatchQueue.main.async {
+                        if !attachedImages.contains(url.path) {
+                            attachedImages.append(url.path)
+                        }
+                    }
+                }
+                handled = true
+            } else if provider.hasItemConformingToTypeIdentifier(UTType.image.identifier) {
+                provider.loadDataRepresentation(forTypeIdentifier: UTType.image.identifier) { data, _ in
+                    guard let data = data else { return }
+                    let fileName = "task-img-\(Int(Date().timeIntervalSince1970)).png"
+                    let dir = FileManager.default.temporaryDirectory
+                        .appendingPathComponent("scope-task-images", isDirectory: true)
+                    try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+                    let fileURL = dir.appendingPathComponent(fileName)
+                    if let rep = NSBitmapImageRep(data: data),
+                       let png = rep.representation(using: .png, properties: [:]) {
+                        try? png.write(to: fileURL)
+                        DispatchQueue.main.async {
+                            attachedImages.append(fileURL.path)
+                        }
+                    }
+                }
+                handled = true
+            }
+        }
+        return handled
+    }
+
+    private func pickImages() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.png, .jpeg, .gif, .webP, .bmp, .tiff, .heic]
+        panel.allowsMultipleSelection = true
+        panel.canChooseDirectories = false
+        panel.title = "Attach Images"
+        if panel.runModal() == .OK {
+            for url in panel.urls {
+                if !attachedImages.contains(url.path) {
+                    attachedImages.append(url.path)
+                }
+            }
+        }
+    }
+
+    private func addCustomLabel() {
+        let label = customLabel.trimmingCharacters(in: .whitespaces).lowercased()
+        if !label.isEmpty {
+            selectedLabels.insert(label)
+            customLabel = ""
+        }
     }
 }
