@@ -1,16 +1,16 @@
 #!/bin/bash
 set -euo pipefail
 
-# Package Scope as a macOS .app bundle
+# Package Workspace as a macOS .app bundle
 # Usage: ./scripts/package-app.sh
-# Output: build/Scope.app
+# Output: build/Workspace.app
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 BUILD_DIR="$PROJECT_DIR/build"
 APP_NAME="Workspace"
 APP_BUNDLE="$BUILD_DIR/$APP_NAME.app"
-BUNDLE_ID="com.scope.app"
+BUNDLE_ID="com.workspace.app"
 VERSION="1.0.0"
 
 echo "=== Packaging $APP_NAME.app ==="
@@ -20,8 +20,8 @@ echo ""
 echo "[1/5] Building release binaries..."
 cd "$PROJECT_DIR/Context"
 swift build -c release 2>&1 | tail -3
-BINARY_PATH=".build/release/Scope"
-MCP_BINARY_PATH=".build/release/ScopeMCP"
+BINARY_PATH=".build/release/Workspace"
+MCP_BINARY_PATH=".build/release/WorkspaceMCP"
 
 if [ ! -f "$BINARY_PATH" ]; then
     echo "ERROR: Binary not found at $BINARY_PATH"
@@ -68,7 +68,7 @@ mkdir -p "$APP_BUNDLE/Contents/Resources"
 
 # Copy binaries
 cp "$BINARY_PATH" "$APP_BUNDLE/Contents/MacOS/$APP_NAME"
-cp "$MCP_BINARY_PATH" "$APP_BUNDLE/Contents/MacOS/ScopeMCP"
+cp "$MCP_BINARY_PATH" "$APP_BUNDLE/Contents/MacOS/WorkspaceMCP"
 
 # Copy icon
 cp "$ICON_WORK/AppIcon.icns" "$APP_BUNDLE/Contents/Resources/AppIcon.icns"
@@ -111,13 +111,13 @@ cat > "$APP_BUNDLE/Contents/Info.plist" << PLIST
                 <string>workspace</string>
             </array>
             <key>CFBundleURLName</key>
-            <string>com.scope.deeplink</string>
+            <string>com.workspace.deeplink</string>
         </dict>
     </array>
     <key>LSUIElement</key>
     <false/>
     <key>NSMicrophoneUsageDescription</key>
-    <string>Scope needs microphone access to record meeting audio for transcription and task extraction.</string>
+    <string>Workspace needs microphone access to record meeting audio for transcription and task extraction.</string>
 </dict>
 </plist>
 PLIST
@@ -171,11 +171,11 @@ echo "Or just double-click it in Finder:"
 echo "  open \"$BUILD_DIR\""
 echo ""
 echo "MCP server binary is at:"
-echo "  $APP_BUNDLE/Contents/MacOS/ScopeMCP"
+echo "  $APP_BUNDLE/Contents/MacOS/WorkspaceMCP"
 echo ""
 echo "To configure Claude Code, add to ~/.claude/settings.json:"
 echo "  \"mcpServers\": {"
-echo "    \"scope\": {"
-echo "      \"command\": \"$APP_BUNDLE/Contents/MacOS/ScopeMCP\""
+echo "    \"workspace\": {"
+echo "      \"command\": \"$APP_BUNDLE/Contents/MacOS/WorkspaceMCP\""
 echo "    }"
 echo "  }"

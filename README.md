@@ -1,4 +1,4 @@
-# Scope
+# Workspace
 
 **Persistent memory for AI coding agents**
 A native macOS companion for Claude Code, Gemini CLI, Codex CLI, and OpenCode
@@ -8,7 +8,7 @@ A native macOS companion for Claude Code, Gemini CLI, Codex CLI, and OpenCode
 
 ---
 
-Your AI coding agent forgets everything between sessions. Scope fixes that. It auto-discovers your projects, tracks tasks and sessions, monitors live coding activity, and exposes project data back to your AI via MCP — creating a feedback loop where your agent knows what you're working on and can act on it.
+Your AI coding agent forgets everything between sessions. Workspace fixes that. It auto-discovers your projects, tracks tasks and sessions, monitors live coding activity, and exposes project data back to your AI via MCP — creating a feedback loop where your agent knows what you're working on and can act on it.
 
 ## Features
 
@@ -34,7 +34,7 @@ Your AI coding agent forgets everything between sessions. Scope fixes that. It a
 
 ## MCP Server
 
-Scope includes a companion MCP server (`ScopeMCP`) that exposes your project data to any AI coding tool. When configured, your agent can:
+Workspace includes a companion MCP server (`WorkspaceMCP`) that exposes your project data to any AI coding tool. When configured, your agent can:
 
 - List and manage tasks (create, update status, add notes)
 - Read project notes and search across them
@@ -43,13 +43,13 @@ Scope includes a companion MCP server (`ScopeMCP`) that exposes your project dat
 - Navigate and interact with web pages
 - Generate images
 
-This creates a powerful loop: you manage work in Scope, and your AI has full awareness of that work during coding sessions.
+This creates a powerful loop: you manage work in Workspace, and your AI has full awareness of that work during coding sessions.
 
 ## Getting Started
 
 ### 1. Download
 
-Grab `Scope.app` from [GitHub Releases](https://github.com/ctab30/scope/releases/latest) and drag it to your Applications folder.
+Grab `Workspace.app` from [GitHub Releases](https://github.com/ctab30/scope/releases/latest) and drag it to your Applications folder.
 
 ### 2. Connect your CLI
 
@@ -59,7 +59,7 @@ Click one button in the app to install the MCP server, or configure it manually:
 <summary><strong>Claude Code</strong></summary>
 
 ```bash
-claude mcp add scope ~/Library/Application\ Support/Scope/bin/ScopeMCP
+claude mcp add workspace ~/Library/Application\ Support/Workspace/bin/WorkspaceMCP
 ```
 </details>
 
@@ -70,8 +70,8 @@ claude mcp add scope ~/Library/Application\ Support/Scope/bin/ScopeMCP
 // ~/.gemini/settings.json
 {
   "mcpServers": {
-    "scope": {
-      "command": "~/Library/Application Support/Scope/bin/ScopeMCP",
+    "workspace": {
+      "command": "~/Library/Application Support/Workspace/bin/WorkspaceMCP",
       "args": []
     }
   }
@@ -84,8 +84,8 @@ claude mcp add scope ~/Library/Application\ Support/Scope/bin/ScopeMCP
 
 ```toml
 # ~/.codex/config.toml
-[mcp_servers.scope]
-command = "~/Library/Application Support/Scope/bin/ScopeMCP"
+[mcp_servers.workspace]
+command = "~/Library/Application Support/Workspace/bin/WorkspaceMCP"
 args = []
 ```
 </details>
@@ -97,8 +97,8 @@ args = []
 // ~/.opencode/config.json
 {
   "mcpServers": {
-    "scope": {
-      "command": "~/Library/Application Support/Scope/bin/ScopeMCP",
+    "workspace": {
+      "command": "~/Library/Application Support/Workspace/bin/WorkspaceMCP",
       "args": []
     }
   }
@@ -108,7 +108,7 @@ args = []
 
 ### 3. Configure
 
-Open **Settings** (`Cmd + ,`) → **Scope Engine** tab and paste your [OpenRouter API key](https://openrouter.ai/keys).
+Open **Settings** (`Cmd + ,`) → **AI Engine** tab and paste your [OpenRouter API key](https://openrouter.ai/keys).
 
 This powers the built-in AI chat, semantic code search, and image generation. All models are served through OpenRouter with a single key.
 
@@ -136,17 +136,17 @@ Your AI agent now has persistent memory, task tracking, and project intelligence
 git clone https://github.com/ctab30/scope.git
 cd scope
 bash scripts/package-app.sh
-cp -r build/Scope.app /Applications/
+cp -r build/Workspace.app /Applications/
 ```
 
 ## Architecture
 
-Scope is a pure Swift Package Manager project with two executable targets:
+Workspace is a pure Swift Package Manager project with two executable targets:
 
 | Target | Description |
 |--------|-------------|
-| `Scope` | Main GUI app — SwiftUI + AppKit, no Xcode project needed |
-| `ScopeMCP` | Standalone MCP server binary, communicates via stdio |
+| `Workspace` | Main GUI app — SwiftUI + AppKit, no Xcode project needed |
+| `WorkspaceMCP` | Standalone MCP server binary, communicates via stdio |
 
 ### Dependencies
 
@@ -159,7 +159,7 @@ No Electron. No web views (except the built-in browser). No node_modules. The en
 
 ### Data Storage
 
-All data lives in `~/Library/Application Support/Scope/scope.db` — a single SQLite database shared by both the GUI app and the MCP server.
+All data lives in `~/Library/Application Support/Workspace/workspace.db` — a single SQLite database shared by both the GUI app and the MCP server.
 
 ## License
 

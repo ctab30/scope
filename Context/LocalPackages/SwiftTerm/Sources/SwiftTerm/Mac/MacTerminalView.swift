@@ -385,7 +385,11 @@ open class TerminalView: NSView, NSTextInputClient, NSUserInterfaceValidations, 
         }
     }
 
-    public var scrollerStyle: NSScroller.Style = .overlay
+    public var scrollerStyle: NSScroller.Style = .overlay {
+        didSet {
+            scroller?.scrollerStyle = scrollerStyle
+        }
+    }
 
     func getScrollerFrame() -> CGRect {
         let scrollerWidth = NSScroller.scrollerWidth(for: .regular, scrollerStyle: scrollerStyle)
