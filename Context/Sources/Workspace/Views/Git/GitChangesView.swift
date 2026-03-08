@@ -449,9 +449,9 @@ struct GitChangesView: View {
                     .padding(.vertical, WorkspaceTheme.Spacing.xxs)
                     .background(
                         RoundedRectangle(cornerRadius: WorkspaceTheme.Radius.small)
-                            .fill(commitsAhead > 0 ? Color.accentColor.opacity(0.8) : Color.secondary.opacity(WorkspaceTheme.Opacity.border))
+                            .fill(commitsAhead > 0 ? Color.accentColor.opacity(0.8) : Color.white.opacity(WorkspaceTheme.Opacity.selection))
                     )
-                    .foregroundColor(commitsAhead > 0 ? .white : .secondary)
+                    .foregroundColor(commitsAhead > 0 ? .white : .white.opacity(0.7))
                 }
                 .buttonStyle(.plain)
                 .disabled(isPushing)
