@@ -51,7 +51,6 @@ struct ProjectWindowView: View {
         .environmentObject(claudeService)
         .environmentObject(githubService)
         .environmentObject(contextEngine)
-        .preferredColorScheme(.dark)
         .background(.ultraThinMaterial)
         .ignoresSafeArea()
         .background(TransparentWindowSetter(title: project?.name ?? "Project"))

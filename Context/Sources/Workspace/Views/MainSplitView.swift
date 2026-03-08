@@ -17,6 +17,7 @@ struct MainSplitView: View {
             } trailing: {
                 GUIPanelView()
             }
+            .toolbarBackground(.hidden, for: .windowToolbar)
             .background(.ultraThinMaterial)
             .ignoresSafeArea()
         }

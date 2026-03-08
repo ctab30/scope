@@ -88,6 +88,12 @@ struct TaskItem: Codable, FetchableRecord, MutablePersistableRecord {
     var labels: String?
     var attachments: String?
     var isGlobal: Bool = false
+    var gmailThreadId: String?
+    var gmailMessageId: String?
+    var recordingId: String?
+    var parentTaskId: Int64?
+    var blockedBy: String?
+    var completionSummary: String?
     static let databaseTableName = "taskItems"
 
     mutating func didInsert(_ inserted: InsertionSuccess) {
@@ -186,6 +192,66 @@ struct IndexState: Codable, FetchableRecord {
     var lastError: String?
 
     static let databaseTableName = "indexState"
+}
+
+// MARK: - String Similarity
+
+/// Jaro-Winkler string similarity (0.0 = no match, 1.0 = exact match)
+func jaroWinklerSimilarity(_ s1: String, _ s2: String) -> Double {
+    let s1 = Array(s1.lowercased())
+    let s2 = Array(s2.lowercased())
+
+    guard !s1.isEmpty && !s2.isEmpty else { return s1.isEmpty && s2.isEmpty ? 1.0 : 0.0 }
+
+    let matchDistance = max(0, max(s1.count, s2.count) / 2 - 1)
+
+    var s1Matches = [Bool](repeating: false, count: s1.count)
+    var s2Matches = [Bool](repeating: false, count: s2.count)
+    var matches: Double = 0
+    var transpositions: Double = 0
+
+    for i in 0..<s1.count {
+        let start = max(0, i - matchDistance)
+        let end = min(i + matchDistance + 1, s2.count)
+        for j in start..<end {
+            guard !s2Matches[j] && s1[i] == s2[j] else { continue }
+            s1Matches[i] = true
+            s2Matches[j] = true
+            matches += 1
+            break
+        }
+    }
+
+    guard matches > 0 else { return 0.0 }
+
+    var k = 0
+    for i in 0..<s1.count {
+        guard s1Matches[i] else { continue }
+        while !s2Matches[k] { k += 1 }
+        if s1[i] != s2[k] { transpositions += 1 }
+        k += 1
+    }
+
+    let jaro = (matches / Double(s1.count) + matches / Double(s2.count) + (matches - transpositions / 2) / matches) / 3.0
+
+    // Winkler bonus for common prefix (up to 4 chars)
+    var prefix = 0
+    for i in 0..<min(4, min(s1.count, s2.count)) {
+        guard s1[i] == s2[i] else { break }
+        prefix += 1
+    }
+
+    return jaro + Double(prefix) * 0.1 * (1.0 - jaro)
+}
+
+/// Normalized token overlap (Jaccard similarity on words)
+func tokenOverlap(_ s1: String, _ s2: String) -> Double {
+    let tokens1 = Set(s1.lowercased().split(whereSeparator: { !$0.isLetter && !$0.isNumber }).map(String.init))
+    let tokens2 = Set(s2.lowercased().split(whereSeparator: { !$0.isLetter && !$0.isNumber }).map(String.init))
+    guard !tokens1.isEmpty || !tokens2.isEmpty else { return 0.0 }
+    let intersection = tokens1.intersection(tokens2).count
+    let union = tokens1.union(tokens2).count
+    return union > 0 ? Double(intersection) / Double(union) : 0.0
 }
 
 // MARK: - MCP Protocol Types
@@ -287,19 +353,39 @@ class MCPConnectionStatus {
     private var initialConnectedAt: String?
 
     /// Detects if the parent Claude Code process was launched with --dangerously-skip-permissions.
+    /// Walks up the process tree (up to 5 levels) and also checks environment variables.
     lazy var isDangerousMode: Bool = {
-        let ppid = getppid()
-        guard ppid > 1 else { return false }
-        let proc = Process()
-        proc.executableURL = URL(fileURLWithPath: "/bin/ps")
-        proc.arguments = ["-p", "\(ppid)", "-o", "args="]
-        let pipe = Pipe()
-        proc.standardOutput = pipe
-        proc.standardError = FileHandle.nullDevice
-        guard (try? proc.run()) != nil else { return false }
-        proc.waitUntilExit()
-        let output = String(data: pipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
-        return output.contains("--dangerously-skip-permissions")
+        // Check environment variable first (most reliable if set)
+        if let envVal = ProcessInfo.processInfo.environment["CLAUDE_DANGEROUS_MODE"],
+           !envVal.isEmpty && envVal != "0" && envVal.lowercased() != "false" {
+            return true
+        }
+
+        // Walk up the process tree checking each ancestor's command line
+        var currentPid = getppid()
+        for _ in 0..<5 {
+            guard currentPid > 1 else { break }
+            let proc = Process()
+            proc.executableURL = URL(fileURLWithPath: "/bin/ps")
+            proc.arguments = ["-p", "\(currentPid)", "-o", "ppid=,args="]
+            let pipe = Pipe()
+            proc.standardOutput = pipe
+            proc.standardError = FileHandle.nullDevice
+            guard (try? proc.run()) != nil else { break }
+            proc.waitUntilExit()
+            let output = (String(data: pipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !output.isEmpty else { break }
+
+            if output.contains("--dangerously-skip-permissions") || output.contains("-dangerously-skip-permissions") {
+                return true
+            }
+
+            // Extract parent PID for next iteration
+            let parts = output.split(separator: " ", maxSplits: 1)
+            guard let nextPid = parts.first.flatMap({ Int32($0) }), nextPid > 1, nextPid != currentPid else { break }
+            currentPid = nextPid
+        }
+        return false
     }()
 
     private func writeStatus(projectId: String?, projectName: String?, cwd: String) {
@@ -528,6 +614,12 @@ class MCPServer {
     let connectionStatus: MCPConnectionStatus
     let embeddingCache = EmbeddingCache()
 
+    /// Tool tier controls which tools are exposed. Reduces context window usage.
+    /// core (~5K tokens): Essential task + project tools only
+    /// standard (~10K tokens): Core + notes + plans + task files
+    /// full (~20K tokens): All tools including browser, git, network, env
+    let toolTier: String  // "core", "standard", "full"
+
     init(db: DatabaseQueue) {
         self.db = db
         self.workingDirectory = FileManager.default.currentDirectoryPath
@@ -568,6 +660,10 @@ class MCPServer {
         } else {
             FileHandle.standardError.write("WorkspaceMCP: no project matched for \(cwd)\n".data(using: .utf8)!)
         }
+
+        // Read tool tier from environment (default: full for backwards compatibility)
+        self.toolTier = ProcessInfo.processInfo.environment["WORKSPACE_TOOLS"] ?? "full"
+        FileHandle.standardError.write("WorkspaceMCP: tool tier = \(self.toolTier)\n".data(using: .utf8)!)
 
         // Register connection
         connectionStatus.register(projectId: foundId, projectName: foundName, cwd: cwd)
@@ -622,23 +718,79 @@ class MCPServer {
     func handleRequest(_ req: JSONRPCRequest) -> [String: Any] {
         switch req.method {
         case "initialize":
+            let instructions = "Start with get_project_context. Create tasks with create_task(status: \"in_progress\"). Finish with complete_task. Use get_next_task to pick up queued work."
             return successResponse(id: req.id, result: [
                 "protocolVersion": "2024-11-05",
                 "capabilities": ["tools": [:]],
-                "serverInfo": ["name": "workspace", "version": "1.0.0"]
+                "serverInfo": ["name": "workspace", "version": "2.0.0"],
+                "instructions": instructions
             ])
 
         case "notifications/initialized":
             return [:] // no response for notifications
 
         case "tools/list":
-            return successResponse(id: req.id, result: ["tools": toolDefinitions()])
+            let allTools = toolDefinitions()
+            let filtered = filterToolsByTier(allTools)
+            return successResponse(id: req.id, result: ["tools": filtered])
 
         case "tools/call":
             return handleToolCall(req)
 
         default:
             return errorResponse(id: req.id, code: -32601, message: "Method not found: \(req.method)")
+        }
+    }
+
+    /// Filter tools based on the configured tool tier.
+    /// core: task management + project context only
+    /// standard: core + notes + plans + files + clients
+    /// full: everything
+    func filterToolsByTier(_ tools: [[String: Any]]) -> [[String: Any]] {
+        guard toolTier != "full" else { return tools }
+
+        let coreTool = Set([
+            "get_current_project",
+            "get_project_context",
+            "list_tasks",
+            "get_task",
+            "create_task",
+            "update_task",
+            "complete_task",
+            "get_next_task",
+            "search_tasks",
+            "add_task_note",
+        ])
+
+        let standardTools = coreTool.union([
+            "list_projects",
+            "list_task_notes",
+            "set_task_plan",
+            "get_task_plan",
+            "add_task_file",
+            "list_notes",
+            "get_note",
+            "create_note",
+            "update_note",
+            "delete_note",
+            "search_notes",
+            "list_clients",
+            "create_client",
+        ])
+
+        let allowedTools: Set<String>
+        switch toolTier {
+        case "core":
+            allowedTools = coreTool
+        case "standard":
+            allowedTools = standardTools
+        default:
+            return tools // unknown tier = full
+        }
+
+        return tools.filter { tool in
+            guard let name = tool["name"] as? String else { return false }
+            return allowedTools.contains(name)
         }
     }
 
@@ -694,15 +846,17 @@ class MCPServer {
             ],
             [
                 "name": "create_task",
-                "description": "Create a new task. MUST be called before starting ANY work — code reviews, bug fixes, features, refactors, etc. Fill out ALL fields: title, description, priority, and labels. project_id is auto-detected from working directory if omitted.",
+                "description": "Create a new task. Use status='in_progress' to create and start immediately. Duplicate detection is automatic. project_id is auto-detected.",
                 "inputSchema": [
                     "type": "object",
                     "properties": [
                         "project_id": ["type": "string", "description": "Project ID (auto-detected if omitted)"],
                         "title": ["type": "string", "description": "Clear, specific task title"],
-                        "description": ["type": "string", "description": "Detailed description: what needs to be done, why, acceptance criteria, and any relevant context"],
-                        "priority": ["type": "integer", "description": "Priority: 0=none, 1=low, 2=medium, 3=high, 4=urgent. Always set appropriately."],
-                        "labels": ["type": "array", "items": ["type": "string"], "description": "Labels from: bug, feature, hotfix, refactor, test, docs, performance, security, design, devops. Always include at least one."],
+                        "description": ["type": "string", "description": "What needs to be done and why"],
+                        "priority": ["type": "integer", "description": "0=none, 1=low, 2=medium, 3=high, 4=urgent"],
+                        "labels": ["type": "array", "items": ["type": "string"], "description": "Labels: bug, feature, hotfix, refactor, test, docs, performance, security, design, devops"],
+                        "status": ["type": "string", "description": "Initial status. Use 'in_progress' to start immediately.", "enum": ["todo", "in_progress"]],
+                        "force": ["type": "boolean", "description": "Create even if similar tasks exist"],
                     ],
                     "required": ["title", "description", "priority", "labels"]
                 ]
@@ -1364,6 +1518,42 @@ class MCPServer {
                     "required": ["query"]
                 ] as [String: Any]
             ] as [String: Any],
+            // MARK: - Smart Task Tools
+            [
+                "name": "get_next_task",
+                "description": "Get the highest-priority actionable task. Returns the most important non-blocked task that needs work. Use when starting a session or when unsure what to work on next.",
+                "inputSchema": [
+                    "type": "object",
+                    "properties": [
+                        "project_id": ["type": "string", "description": "Project ID (auto-detected if omitted)"]
+                    ]
+                ]
+            ],
+            [
+                "name": "search_tasks",
+                "description": "Search tasks by title or description. Use to find existing tasks before creating new ones, or to find related work.",
+                "inputSchema": [
+                    "type": "object",
+                    "properties": [
+                        "query": ["type": "string", "description": "Search query (matches against title and description)"],
+                        "project_id": ["type": "string", "description": "Project ID (auto-detected if omitted)"],
+                        "include_done": ["type": "boolean", "description": "Include completed tasks (default: false)"]
+                    ],
+                    "required": ["query"]
+                ]
+            ],
+            [
+                "name": "complete_task",
+                "description": "Mark a task as done with a completion summary. Preferred over update_task for finishing work — captures what was accomplished for future reference.",
+                "inputSchema": [
+                    "type": "object",
+                    "properties": [
+                        "task_id": ["type": "integer", "description": "Task ID"],
+                        "summary": ["type": "string", "description": "What was accomplished. Include key changes, files modified, and decisions made."]
+                    ],
+                    "required": ["task_id"]
+                ]
+            ],
         ]
     }
 
@@ -1440,6 +1630,10 @@ class MCPServer {
             case "list_env_files":     result = try listEnvFiles(args)
             case "get_env_variables":  result = try getEnvVariables(args)
             case "context_search":     result = try contextSearch(args)
+            // Smart task tools
+            case "get_next_task":      result = try getNextTask(args)
+            case "search_tasks":       result = try searchTasks(args)
+            case "complete_task":      result = try completeTask(args)
             default:
                 return errorResponse(id: req.id, code: -32602, message: "Unknown tool: \(toolName)")
             }
@@ -1510,41 +1704,19 @@ class MCPServer {
         }
 
         if !techStack.isEmpty {
-            sections.append("## Tech Stack")
-            sections.append(techStack.joined(separator: ", "))
-            sections.append("")
+            sections.append("Stack: \(techStack.joined(separator: ", "))")
         }
 
-        // Top-level file structure
-        if let contents = try? fm.contentsOfDirectory(atPath: workingDirectory).sorted() {
-            let filtered = contents.filter { !$0.hasPrefix(".") || $0 == ".github" || $0 == ".claude" }
-            let capped = filtered.prefix(30)
-            sections.append("## Project Structure")
-            for item in capped {
-                let fullPath = (workingDirectory as NSString).appendingPathComponent(item)
-                var isDir: ObjCBool = false
-                fm.fileExists(atPath: fullPath, isDirectory: &isDir)
-                sections.append("  \(isDir.boolValue ? "📁" : "📄") \(item)")
-            }
-            if filtered.count > 30 {
-                sections.append("  ... and \(filtered.count - 30) more")
-            }
-            sections.append("")
-        }
-
-        // Recent git activity
-        let gitLog = shell("git -C \"\(workingDirectory)\" log --oneline -10 2>/dev/null")
-        if !gitLog.isEmpty {
-            sections.append("## Recent Git Activity")
-            sections.append(gitLog)
-            sections.append("")
-        }
-
+        // Git context (branch + recent commits, compact)
         let gitBranch = shell("git -C \"\(workingDirectory)\" branch --show-current 2>/dev/null").trimmingCharacters(in: .whitespacesAndNewlines)
         if !gitBranch.isEmpty {
-            sections.append("Current branch: \(gitBranch)")
-            sections.append("")
+            sections.append("Branch: \(gitBranch)")
         }
+        let gitLog = shell("git -C \"\(workingDirectory)\" log --oneline -5 2>/dev/null")
+        if !gitLog.isEmpty {
+            sections.append("Recent commits:\n\(gitLog)")
+        }
+        sections.append("")
 
         // Open tasks summary
         let openTasks = try db.read { db in
@@ -1554,38 +1726,58 @@ class MCPServer {
                 .fetchAll(db)
         }
         if !openTasks.isEmpty {
+            let inProgress = openTasks.filter { $0.status == "in_progress" }
+            let todo = openTasks.filter { $0.status == "todo" }
+            let attention = openTasks.filter { $0.status == "needs_attention" }
+
             sections.append("## Open Tasks (\(openTasks.count))")
-            for t in openTasks {
-                let priority = ["⬜", "🟦", "🟨", "🟧", "🟥"][min(t.priority, 4)]
-                sections.append("  \(priority) #\(t.id ?? 0) [\(t.status)] \(t.title)")
+
+            if !inProgress.isEmpty {
+                sections.append("### In Progress")
+                for t in inProgress {
+                    sections.append("  #\(t.id ?? 0) \(t.title)")
+                }
+            }
+            if !attention.isEmpty {
+                sections.append("### Needs Attention")
+                for t in attention {
+                    sections.append("  #\(t.id ?? 0) \(t.title)")
+                }
+            }
+            if !todo.isEmpty {
+                sections.append("### Todo (\(todo.count))")
+                for t in todo.prefix(3) {
+                    sections.append("  #\(t.id ?? 0) \(t.title)")
+                }
+                if todo.count > 3 {
+                    sections.append("  ... and \(todo.count - 3) more")
+                }
             }
             sections.append("")
         }
 
-        // Pinned notes
+        // Pinned notes (titles only — use get_note for full content)
         let pinnedNotes = try db.read { db in
             try Note.filter(Column("projectId") == projectId)
                 .filter(Column("pinned") == true)
                 .order(Column("updatedAt").desc)
+                .limit(5)
                 .fetchAll(db)
         }
         if !pinnedNotes.isEmpty {
             sections.append("## Pinned Notes")
             for n in pinnedNotes {
                 sections.append("  📌 \(n.title)")
-                // Show first 200 chars of content
-                let preview = String(n.content.prefix(200))
-                sections.append("     \(preview)\(n.content.count > 200 ? "..." : "")")
             }
             sections.append("")
         }
 
-        // Recent notes (not pinned)
+        // Recent notes (titles only)
         let recentNotes = try db.read { db in
             try Note.filter(Column("projectId") == projectId)
                 .filter(Column("pinned") == false)
                 .order(Column("updatedAt").desc)
-                .limit(5)
+                .limit(3)
                 .fetchAll(db)
         }
         if !recentNotes.isEmpty {
@@ -1595,10 +1787,6 @@ class MCPServer {
             }
             sections.append("")
         }
-
-        // Reminder at the end of context output
-        sections.append("---")
-        sections.append("⚠️ REMINDER: You MUST call `create_task` before starting ANY work. No exceptions.")
 
         return sections.joined(separator: "\n")
     }
@@ -1660,6 +1848,23 @@ class MCPServer {
                 lines.append("    \(preview)\(desc.count > 100 ? "..." : "")")
             }
         }
+
+        // Add smart summary
+        let todoCount = tasks.filter { $0.status == "todo" }.count
+        let inProgressCount = tasks.filter { $0.status == "in_progress" }.count
+        let attentionCount = tasks.filter { $0.status == "needs_attention" }.count
+        let doneCount = tasks.filter { $0.status == "done" }.count
+
+        var summaryParts: [String] = []
+        if todoCount > 0 { summaryParts.append("\(todoCount) todo") }
+        if inProgressCount > 0 { summaryParts.append("\(inProgressCount) in progress") }
+        if attentionCount > 0 { summaryParts.append("\(attentionCount) needs attention") }
+        if doneCount > 0 { summaryParts.append("\(doneCount) done") }
+
+        if statusFilter == nil && !summaryParts.isEmpty {
+            lines.insert("Summary: \(summaryParts.joined(separator: ", "))", at: 1)
+        }
+
         return lines.joined(separator: "\n")
     }
 
@@ -1684,11 +1889,12 @@ class MCPServer {
             "Task #\(task.id ?? 0): \(task.title)",
             "Status: \(task.status)",
             "Priority: \(["none", "low", "medium", "high", "urgent"][min(task.priority, 4)])",
-            "Source: \(task.source)",
             "Created: \(task.createdAt)",
         ]
+        if let completedAt = task.completedAt { lines.append("Completed: \(completedAt)") }
         if let desc = task.description { lines.append("Description:\n\(desc)") }
         if let labels = task.labels { lines.append("Labels: \(labels)") }
+        if let summary = task.completionSummary { lines.append("\nCompletion Summary:\n\(summary)") }
 
         // Show attached files
         let filePaths = parseAttachmentsArray(task.attachments)
@@ -1738,12 +1944,42 @@ class MCPServer {
             }
         }
 
+        // Check for similar existing tasks (non-done)
+        let existingTasks = try db.read { db in
+            try TaskItem.filter(Column("projectId") == projectId)
+                .filter(Column("status") != "done")
+                .fetchAll(db)
+        }
+
+        let force = args["force"] as? Bool ?? false
+
+        var duplicateWarnings: [String] = []
+        for existing in existingTasks {
+            let jwScore = jaroWinklerSimilarity(title, existing.title)
+            let tokenScore = tokenOverlap(title, existing.title)
+            if jwScore > 0.85 || tokenScore > 0.7 {
+                let matchPct = Int(max(jwScore, tokenScore) * 100)
+                duplicateWarnings.append("#\(existing.id ?? 0) \"\(existing.title)\" (\(matchPct)% match, status: \(existing.status))")
+            }
+        }
+
+        // If duplicates found and not forced, return the best match for easy resumption
+        if !duplicateWarnings.isEmpty && !force {
+            var result = "Similar task exists: \(duplicateWarnings[0])"
+            if duplicateWarnings.count > 1 {
+                for w in duplicateWarnings.dropFirst() { result += "\n  Also: \(w)" }
+            }
+            return result
+        }
+
+        let initialStatus = (args["status"] as? String == "in_progress") ? "in_progress" : "todo"
+
         var task = TaskItem(
             id: nil,
             projectId: projectId,
             title: title,
             description: description,
-            status: "todo",
+            status: initialStatus,
             priority: min(max(priority, 0), 4),
             sourceSession: nil,
             source: "claude",
@@ -1757,7 +1993,16 @@ class MCPServer {
             try task.insert(db)
         }
 
-        return "Created task #\(task.id ?? 0): \(title)"
+        // If created as in_progress, track it for hook-based needs_attention
+        if initialStatus == "in_progress", let taskId = task.id {
+            trackActiveTask(taskId: taskId, status: "in_progress")
+        }
+
+        var result = "Created task #\(task.id ?? 0): \(title)"
+        if initialStatus == "in_progress" {
+            result += " [in_progress]"
+        }
+        return result
     }
 
     func updateTask(_ args: [String: Any]) throws -> String {
@@ -1974,9 +2219,13 @@ class MCPServer {
             throw MCPError(message: "Task #\(taskId) not found")
         }
 
-        // Sanitize filename
-        let safeName = filename.replacingOccurrences(of: "/", with: "-")
-            .replacingOccurrences(of: "..", with: "")
+        // Sanitize filename: take only the last component and strip unsafe characters
+        let baseName = (filename as NSString).lastPathComponent
+        let allowedChars = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-_. "))
+        let safeName = String(baseName.unicodeScalars.filter { allowedChars.contains($0) })
+        guard !safeName.trimmingCharacters(in: CharacterSet.whitespaces).isEmpty else {
+            throw MCPError(message: "filename contains no valid characters")
+        }
         let finalName = safeName.hasSuffix(".md") ? safeName : safeName + ".md"
 
         let dir = taskFilesDir(taskId: taskId)
@@ -1995,6 +2244,183 @@ class MCPServer {
         }
 
         return "File '\(finalName)' attached to task #\(taskId) (\(content.count) chars)"
+    }
+
+    // MARK: - Smart Task Implementations
+
+    func getNextTask(_ args: [String: Any]) throws -> String {
+        let projectId = try resolveProjectId(args)
+
+        // Get non-done tasks ordered by priority desc, then oldest first
+        let allTasks = try db.read { db in
+            try TaskItem.filter(Column("projectId") == projectId)
+                .filter(Column("status") != "done")
+                .order(Column("priority").desc, Column("createdAt").asc)
+                .fetchAll(db)
+        }
+
+        // Filter out blocked tasks (tasks whose blockedBy dependencies aren't all done)
+        let doneTaskIds = try db.read { db in
+            try Int64.fetchAll(db, TaskItem
+                .select(Column("id"))
+                .filter(Column("projectId") == projectId)
+                .filter(Column("status") == "done"))
+        }
+        let doneSet = Set(doneTaskIds)
+
+        let tasks = allTasks.filter { task in
+            guard let json = task.blockedBy,
+                  let data = json.data(using: .utf8),
+                  let ids = try? JSONDecoder().decode([Int64].self, from: data),
+                  !ids.isEmpty
+            else { return true } // not blocked
+            return ids.allSatisfy { doneSet.contains($0) } // all blockers are done
+        }
+
+        guard let next = tasks.first else {
+            if !allTasks.isEmpty {
+                return "All \(allTasks.count) open task(s) are blocked by incomplete dependencies.\nUse list_tasks to see what's blocking them."
+            }
+            return "No actionable tasks found. All tasks are done or none exist.\nUse create_task to add new work."
+        }
+
+        let nextId = next.id ?? 0
+
+        // Get notes for context
+        let notes = try db.read { db in
+            try TaskNote.filter(Column("taskId") == Int64(nextId))
+                .order(Column("createdAt").desc)
+                .limit(3)
+                .fetchAll(db)
+        }
+
+        // Check for plan file
+        let taskFilesDir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+            .appendingPathComponent("Workspace/task-files/\(nextId)")
+        let planPath = taskFilesDir.appendingPathComponent("PLAN.md")
+        let hasPlan = FileManager.default.fileExists(atPath: planPath.path)
+
+        var lines = [
+            "## Next Task: #\(nextId)",
+            "**\(next.title)**",
+            "Priority: \(["none", "low", "medium", "high", "urgent"][min(next.priority, 4)])",
+            "Status: \(next.status)",
+        ]
+        if let desc = next.description { lines.append("\nDescription:\n\(desc)") }
+        if let labels = next.labels { lines.append("Labels: \(labels)") }
+
+        if hasPlan {
+            lines.append("\n📋 This task has an execution plan. Call get_task_plan(\(nextId)) to review it.")
+        }
+
+        if !notes.isEmpty {
+            lines.append("\nRecent notes:")
+            let formatter = DateFormatter()
+            formatter.dateFormat = "MMM d, HH:mm"
+            for note in notes {
+                lines.append("  [\(formatter.string(from: note.createdAt))] \(note.content.prefix(200))")
+            }
+        }
+
+        // Summary of other open tasks
+        let otherCount = tasks.count - 1
+        if otherCount > 0 {
+            lines.append("\n(\(otherCount) other open task\(otherCount == 1 ? "" : "s") in queue)")
+        }
+
+        lines.append("\n→ Call update_task(\(nextId), status: \"in_progress\") to start working on this task.")
+
+        return lines.joined(separator: "\n")
+    }
+
+    func searchTasks(_ args: [String: Any]) throws -> String {
+        let projectId = try resolveProjectId(args)
+        guard let query = args["query"] as? String, !query.isEmpty else {
+            throw MCPError(message: "query is required")
+        }
+        let includeDone = args["include_done"] as? Bool ?? false
+
+        let allTasks = try db.read { db in
+            var request = TaskItem.filter(Column("projectId") == projectId)
+            if !includeDone {
+                request = request.filter(Column("status") != "done")
+            }
+            return try request.order(Column("priority").desc).fetchAll(db)
+        }
+
+        // Score each task by similarity to query
+        var scored: [(task: TaskItem, score: Double)] = []
+        for task in allTasks {
+            let titleScore = max(jaroWinklerSimilarity(query, task.title), tokenOverlap(query, task.title))
+            var descScore: Double = 0
+            if let desc = task.description {
+                descScore = tokenOverlap(query, desc) * 0.7 // Description match weighted less
+            }
+            let score = max(titleScore, descScore)
+            if score > 0.3 { // Minimum relevance threshold
+                scored.append((task, score))
+            }
+        }
+
+        scored.sort { $0.score > $1.score }
+        let results = scored.prefix(10)
+
+        if results.isEmpty {
+            return "No tasks matching '\(query)' found."
+        }
+
+        var lines = ["Search results for '\(query)' (\(results.count) match\(results.count == 1 ? "" : "es")):"]
+        for (task, score) in results {
+            let pct = Int(score * 100)
+            lines.append("  #\(task.id ?? 0) [\(task.status)] \(task.title) (\(pct)% relevance)")
+            if let desc = task.description {
+                lines.append("    \(desc.prefix(80).replacingOccurrences(of: "\n", with: " "))\(desc.count > 80 ? "..." : "")")
+            }
+        }
+        return lines.joined(separator: "\n")
+    }
+
+    func completeTask(_ args: [String: Any]) throws -> String {
+        guard let taskId = args["task_id"] as? Int ?? (args["task_id"] as? Int64).map(Int.init) else {
+            throw MCPError(message: "task_id is required")
+        }
+
+        guard var task = try db.read({ db in
+            try TaskItem.fetchOne(db, key: Int64(taskId))
+        }) else {
+            throw MCPError(message: "Task #\(taskId) not found")
+        }
+
+        let summary = args["summary"] as? String
+        task.status = "done"
+        task.completedAt = Date()
+        if let summary = summary, !summary.isEmpty {
+            task.completionSummary = summary
+        }
+
+        try db.write { db in
+            try task.update(db)
+        }
+
+        // Also add completion summary as a system note for timeline visibility
+        if let summary = summary, !summary.isEmpty {
+            var note = TaskNote(
+                id: nil,
+                taskId: Int64(taskId),
+                content: "Completed: \(summary)",
+                source: "system",
+                sessionId: nil,
+                createdAt: Date()
+            )
+            try db.write { db in
+                try note.insert(db)
+            }
+        }
+
+        // Clear active task tracking since task is done
+        trackActiveTask(taskId: Int64(taskId), status: "done")
+
+        return "Task #\(taskId) completed: \(task.title)"
     }
 
     // MARK: - Attachments Array Helpers
@@ -2180,6 +2606,9 @@ class MCPServer {
             throw MCPError(message: "query is required")
         }
 
+        // Escape FTS5 special characters by quoting the query
+        let escapedQuery = "\"" + query.replacingOccurrences(of: "\"", with: "\"\"") + "\""
+
         let notes: [Note]
         if isGlobal {
             notes = try db.read { db in
@@ -2190,7 +2619,7 @@ class MCPServer {
                     AND notesFts MATCH ?
                     ORDER BY notes.updatedAt DESC
                     """
-                return try Note.fetchAll(db, sql: sql, arguments: [query])
+                return try Note.fetchAll(db, sql: sql, arguments: [escapedQuery])
             }
         } else {
             let projectId = try resolveProjectId(args)
@@ -2203,7 +2632,7 @@ class MCPServer {
                     AND notesFts MATCH ?
                     ORDER BY notes.updatedAt DESC
                     """
-                return try Note.fetchAll(db, sql: sql, arguments: [projectId, query])
+                return try Note.fetchAll(db, sql: sql, arguments: [projectId, escapedQuery])
             }
         }
 

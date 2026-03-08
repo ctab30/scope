@@ -300,7 +300,7 @@ struct GUIPanelView: View {
 
     private var tabBar: some View {
         Picker("", selection: $appState.selectedTab) {
-            ForEach(AppState.GUITab.allCases, id: \.self) { tab in
+            ForEach(AppState.GUITab.visibleCases, id: \.self) { tab in
                 Text(tab.rawValue).tag(tab)
             }
         }

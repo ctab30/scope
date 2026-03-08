@@ -30,6 +30,11 @@ class AppState: ObservableObject {
             case .dashboard: return "info.circle"
             }
         }
+
+        /// Tabs currently shown in the tab bar.
+        static var visibleCases: [GUITab] {
+            [.tasks, .notes, .files, .browser]
+        }
     }
 
     func loadProjects() {
@@ -108,28 +113,58 @@ class AppState: ObservableObject {
         // Find WorkspaceMCP binary path (sibling to main app binary)
         let mcpBinaryPath = Bundle.main.bundlePath + "/Contents/MacOS/WorkspaceMCP"
 
-        let scriptPath = hooksDir.appendingPathComponent("needs-attention-\(project.id).sh")
         let projectName = project.name.replacingOccurrences(of: "'", with: "'\\''")
-        // The MCP server writes active-tasks/<project-id> with the task ID when update_task
-        // moves a task to in_progress. The hook reads that file to move only that specific task.
+        let lockDir = appSupportPath + "/hook-locks"
+
+        // -- 1. Needs-attention script (Stop/Notification) --
+        // Uses a lock file to prevent multiple timers from piling up.
+        // Checks a "last-active" timestamp so stale timers don't override resumed sessions.
+        let scriptPath = hooksDir.appendingPathComponent("needs-attention-\(project.id).sh")
         let script = """
         #!/bin/bash
-        # Background the delay so the hook returns immediately (avoids timeout kill)
+        DB='\(dbPath)'
+        TASK_FILE='\(activeTasksDir)/\(project.id)'
+        ACTIVE_FILE='\(activeTasksDir)/\(project.id).active'
+        LOCK_FILE='\(lockDir)/\(project.id).lock'
+
+        [ ! -f "$TASK_FILE" ] && exit 0
+        CONTENT=$(cat "$TASK_FILE" 2>/dev/null)
+        TASK_ID=$(echo "$CONTENT" | head -1)
+        [ -z "$TASK_ID" ] && exit 0
+
+        # Skip if running in dangerous mode
+        echo "$CONTENT" | grep -q "^dangerous$" && exit 0
+
+        # Write current timestamp so the timer knows when this event fired
+        mkdir -p '\(lockDir)'
+        date +%s > "$ACTIVE_FILE"
+
+        # If a timer is already running, just update the timestamp and exit.
+        # The running timer will pick up the new timestamp.
+        [ -f "$LOCK_FILE" ] && exit 0
+
+        # Background the delay so the hook returns immediately
         (
+            touch "$LOCK_FILE"
+            trap 'rm -f "$LOCK_FILE"' EXIT
+
             sleep 30
 
-            DB='\(dbPath)'
-            TASK_FILE='\(activeTasksDir)/\(project.id)'
+            # Re-check dangerous mode (may have been set after we started)
+            if [ -f "$TASK_FILE" ]; then
+                cat "$TASK_FILE" 2>/dev/null | grep -q "^dangerous$" && exit 0
+            fi
 
-            [ ! -f "$TASK_FILE" ] && exit 0
-            CONTENT=$(cat "$TASK_FILE" 2>/dev/null)
-            TASK_ID=$(echo "$CONTENT" | head -1)
-            [ -z "$TASK_ID" ] && exit 0
+            # Check if user came back during our sleep (last-active updated after our event)
+            if [ -f "$ACTIVE_FILE" ]; then
+                LAST_ACTIVE=$(cat "$ACTIVE_FILE" 2>/dev/null)
+                NOW=$(date +%s)
+                ELAPSED=$((NOW - ${LAST_ACTIVE:-0}))
+                # If activity happened less than 25s ago, user came back — abort
+                [ "$ELAPSED" -lt 25 ] && exit 0
+            fi
 
-            # Skip if running in dangerous mode (autonomous — no user attention needed)
-            echo "$CONTENT" | grep -q "^dangerous$" && exit 0
-
-            # Re-check status after 30s — task may have resumed already
+            # Final check: is the task still in_progress?
             TITLE=$(/usr/bin/sqlite3 "$DB" "SELECT title FROM taskItems WHERE id = $TASK_ID AND status = 'in_progress' LIMIT 1;" 2>/dev/null)
             [ -z "$TITLE" ] && exit 0
 
@@ -140,21 +175,56 @@ class AppState: ObservableObject {
         try? script.write(to: scriptPath, atomically: true, encoding: .utf8)
         try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: scriptPath.path)
 
-        // Resume script — moves task back to in_progress when user responds
+        // -- 2. Resume script (UserPromptSubmit only) --
+        // Writes last-active timestamp to cancel pending needs-attention timers.
         let resumeScriptPath = hooksDir.appendingPathComponent("resume-\(project.id).sh")
         let resumeScript = """
         #!/bin/bash
         DB='\(dbPath)'
         TASK_FILE='\(activeTasksDir)/\(project.id)'
+        ACTIVE_FILE='\(activeTasksDir)/\(project.id).active'
 
         [ ! -f "$TASK_FILE" ] && exit 0
-        TASK_ID=$(cat "$TASK_FILE" 2>/dev/null)
+        TASK_ID=$(head -1 "$TASK_FILE" 2>/dev/null)
         [ -z "$TASK_ID" ] && exit 0
+
+        # Update last-active timestamp — cancels any pending needs-attention timer
+        date +%s > "$ACTIVE_FILE" 2>/dev/null
 
         /usr/bin/sqlite3 "$DB" "UPDATE taskItems SET status = 'in_progress' WHERE id = $TASK_ID AND status = 'needs_attention';"
         """
         try? resumeScript.write(to: resumeScriptPath, atomically: true, encoding: .utf8)
         try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: resumeScriptPath.path)
+
+        // -- 3. File tracking script (PostToolUse: Edit/Write/NotebookEdit) --
+        let fileTrackScriptPath = hooksDir.appendingPathComponent("track-files-\(project.id).sh")
+        let fileTrackScript = """
+        #!/bin/bash
+        INPUT=$(cat)
+        TOOL_NAME=$(echo "$INPUT" | /usr/bin/python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('tool_name',''))" 2>/dev/null)
+        FILE_PATH=$(echo "$INPUT" | /usr/bin/python3 -c "import sys,json; d=json.load(sys.stdin); i=d.get('tool_input',{}); print(i.get('file_path','') or i.get('path',''))" 2>/dev/null)
+
+        case "$TOOL_NAME" in
+            Edit|Write|NotebookEdit) ;;
+            *) exit 0 ;;
+        esac
+
+        [ -z "$FILE_PATH" ] && exit 0
+
+        DB='\(dbPath)'
+        TASK_FILE='\(activeTasksDir)/\(project.id)'
+
+        [ ! -f "$TASK_FILE" ] && exit 0
+        TASK_ID=$(head -1 "$TASK_FILE" 2>/dev/null)
+        [ -z "$TASK_ID" ] && exit 0
+
+        CHANGE_TYPE="edit"
+        [ "$TOOL_NAME" = "Write" ] && CHANGE_TYPE="create"
+
+        /usr/bin/sqlite3 "$DB" "INSERT INTO taskFileChanges (taskId, filePath, changeType, changedAt) VALUES ($TASK_ID, '$(echo "$FILE_PATH" | sed "s/'/''/g")', '$CHANGE_TYPE', datetime('now'));" 2>/dev/null
+        """
+        try? fileTrackScript.write(to: fileTrackScriptPath, atomically: true, encoding: .utf8)
+        try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: fileTrackScriptPath.path)
 
         // Read existing settings.local.json to preserve other settings
         var settings: [String: Any] = [:]
@@ -163,7 +233,7 @@ class AppState: ObservableObject {
             settings = existing
         }
 
-        // Notification/Stop → move task to needs_attention
+        // Notification/Stop → start needs_attention timer (with lock + timestamp)
         let needsAttentionHook: [[String: Any]] = [
             [
                 "matcher": "",
@@ -172,7 +242,7 @@ class AppState: ObservableObject {
                 ]
             ]
         ]
-        // UserPromptSubmit → move task back to in_progress
+        // UserPromptSubmit → resume task + cancel pending timer
         let resumeHook: [[String: Any]] = [
             [
                 "matcher": "",
@@ -181,13 +251,52 @@ class AppState: ObservableObject {
                 ]
             ]
         ]
+        // File tracking hook — only fires on Edit/Write tool use
+        let fileTrackHook: [[String: Any]] = [
+            [
+                "matcher": "Edit|Write|NotebookEdit",
+                "hooks": [
+                    ["type": "command", "command": fileTrackScriptPath.path, "timeout": 5]
+                ]
+            ]
+        ]
+
         settings["hooks"] = [
             "Notification": needsAttentionHook,
             "Stop": needsAttentionHook,
             "UserPromptSubmit": resumeHook,
-            "PostToolUse": resumeHook
+            "PostToolUse": fileTrackHook
         ]
 
+        // Auto-allow key workspace MCP tools
+        var permissions = settings["permissions"] as? [String: Any] ?? [:]
+        var allow = permissions["allow"] as? [String] ?? []
+        let workspaceTools = [
+            "mcp__workspace__get_project_context",
+            "mcp__workspace__get_next_task",
+            "mcp__workspace__create_task",
+            "mcp__workspace__update_task",
+            "mcp__workspace__complete_task",
+            "mcp__workspace__search_tasks",
+            "mcp__workspace__add_task_note",
+            "mcp__workspace__list_tasks",
+            "mcp__workspace__get_task",
+            "mcp__workspace__get_task_plan",
+            "mcp__workspace__set_task_plan",
+            "mcp__workspace__add_task_file",
+            "mcp__workspace__list_task_notes",
+            "mcp__workspace__create_note",
+            "mcp__workspace__search_notes",
+            "mcp__workspace__list_notes",
+            "mcp__workspace__get_note",
+        ]
+        for tool in workspaceTools {
+            if !allow.contains(tool) {
+                allow.append(tool)
+            }
+        }
+        permissions["allow"] = allow
+        settings["permissions"] = permissions
 
         // Write back
         if let jsonData = try? JSONSerialization.data(withJSONObject: settings, options: [.prettyPrinted, .sortedKeys]) {

@@ -20,6 +20,9 @@ struct TaskItem: Codable, Identifiable, FetchableRecord, MutablePersistableRecor
     var gmailThreadId: String?
     var gmailMessageId: String?
     var recordingId: String?
+    var parentTaskId: Int64?
+    var blockedBy: String? // JSON array of task IDs
+    var completionSummary: String?
 
     static let databaseTableName = "taskItems"
 
@@ -122,6 +125,37 @@ struct TaskItem: Codable, Identifiable, FetchableRecord, MutablePersistableRecor
         var current = attachmentsArray
         current.removeAll { $0 == path }
         setAttachments(current)
+    }
+
+    // MARK: - Subtasks & Dependencies
+
+    var blockedByArray: [Int64] {
+        guard let json = blockedBy,
+              let data = json.data(using: .utf8),
+              let array = try? JSONDecoder().decode([Int64].self, from: data)
+        else { return [] }
+        return array
+    }
+
+    mutating func setBlockedBy(_ ids: [Int64]) {
+        if ids.isEmpty {
+            blockedBy = nil
+        } else if let data = try? JSONEncoder().encode(ids),
+                  let str = String(data: data, encoding: .utf8) {
+            blockedBy = str
+        }
+    }
+
+    var isBlocked: Bool {
+        !blockedByArray.isEmpty
+    }
+
+    // MARK: - Status Validation
+
+    static let validStatuses = ["todo", "in_progress", "needs_attention", "done"]
+
+    var isValidStatus: Bool {
+        Self.validStatuses.contains(status)
     }
 
     // MARK: - Label Colors

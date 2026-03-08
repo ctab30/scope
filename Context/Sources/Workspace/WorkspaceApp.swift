@@ -76,6 +76,10 @@ struct WorkspaceApp: App {
         // so keyboard events go to whatever app was previously active.
         NSApplication.shared.setActivationPolicy(.regular)
 
+        // Lock appearance to darkAqua so the glass material always renders consistently,
+        // regardless of the system light/dark setting.
+        NSApplication.shared.appearance = NSAppearance(named: .darkAqua)
+
         // Set the app icon — works for both .app bundles and bare SPM executables.
         // For bare executables, also set the dock tile content view to bypass
         // the generic square frame macOS wraps around non-bundled executables.
@@ -240,7 +244,6 @@ struct WorkspaceApp: App {
                 .environmentObject(githubService)
                 .environmentObject(contextEngine)
                 .environmentObject(updateService)
-                .preferredColorScheme(.dark)
                 .tint(.white)
                 .onAppear {
                     NSApplication.shared.activate(ignoringOtherApps: true)

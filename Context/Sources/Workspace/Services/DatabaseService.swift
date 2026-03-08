@@ -419,6 +419,28 @@ class DatabaseService {
             }
         }
 
+        migrator.registerMigration("v19_taskManagementOverhaul") { db in
+            // Add subtask support
+            try db.alter(table: "taskItems") { t in
+                t.add(column: "parentTaskId", .integer)
+                    .references("taskItems", onDelete: .setNull)
+                t.add(column: "blockedBy", .text) // JSON array of task IDs
+                t.add(column: "completionSummary", .text)
+            }
+
+            // Track file changes per task
+            try db.create(table: "taskFileChanges") { t in
+                t.autoIncrementedPrimaryKey("id")
+                t.column("taskId", .integer).notNull()
+                    .references("taskItems", onDelete: .cascade)
+                t.column("filePath", .text).notNull()
+                t.column("changeType", .text).notNull() // edit, create, delete
+                t.column("sessionId", .text)
+                t.column("changedAt", .datetime).notNull()
+            }
+            try db.create(index: "taskFileChanges_taskId", on: "taskFileChanges", columns: ["taskId"])
+        }
+
         return migrator
     }
 }

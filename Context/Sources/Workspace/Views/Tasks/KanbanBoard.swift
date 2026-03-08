@@ -140,7 +140,10 @@ struct KanbanBoard: View {
         }
         .onAppear { loadTasks() }
         .onChange(of: appState.currentProject) { _, _ in loadTasks() }
-        .onReceive(Timer.publish(every: 2, on: .main, in: .common).autoconnect()) { _ in
+        .onReceive(NotificationCenter.default.publisher(for: .tasksDidChange)) { _ in
+            loadTasks()
+        }
+        .onReceive(Timer.publish(every: 10, on: .main, in: .common).autoconnect()) { _ in
             loadTasks()
         }
     }

@@ -337,29 +337,6 @@ struct GitChangesView: View {
             }
 
             Button {
-                performPush()
-            } label: {
-                HStack(spacing: WorkspaceTheme.Spacing.xxs) {
-                    if isPushing {
-                        ProgressView()
-                            .controlSize(.mini)
-                            .scaleEffect(0.6)
-                    } else {
-                        Image(systemName: "arrow.up")
-                            .font(WorkspaceTheme.Font.footnoteMedium)
-                    }
-                    if commitsAhead > 0 {
-                        Text("\(commitsAhead)")
-                            .font(WorkspaceTheme.Font.caption)
-                    }
-                }
-                .foregroundColor(commitsAhead > 0 ? .accentColor : .secondary)
-            }
-            .buttonStyle(.plain)
-            .disabled(isPushing)
-            .help(hasUpstream ? "Push to remote" : "Push and set upstream")
-
-            Button {
                 Task { await refreshAll() }
             } label: {
                 Image(systemName: "arrow.clockwise")
@@ -448,6 +425,37 @@ struct GitChangesView: View {
                 }
                 .buttonStyle(.plain)
                 .disabled(!canCommit || isCommitting)
+
+                Button {
+                    confirmAndPush()
+                } label: {
+                    HStack(spacing: WorkspaceTheme.Spacing.xxs) {
+                        if isPushing {
+                            ProgressView()
+                                .controlSize(.mini)
+                                .scaleEffect(0.6)
+                        } else {
+                            Image(systemName: "arrow.up")
+                                .font(WorkspaceTheme.Font.footnoteMedium)
+                        }
+                        Text("Push")
+                            .font(WorkspaceTheme.Font.footnoteSemibold)
+                        if commitsAhead > 0 {
+                            Text("\(commitsAhead)")
+                                .font(WorkspaceTheme.Font.caption)
+                        }
+                    }
+                    .padding(.horizontal, WorkspaceTheme.Spacing.md)
+                    .padding(.vertical, WorkspaceTheme.Spacing.xxs)
+                    .background(
+                        RoundedRectangle(cornerRadius: WorkspaceTheme.Radius.small)
+                            .fill(commitsAhead > 0 ? Color.accentColor.opacity(0.8) : Color.secondary.opacity(WorkspaceTheme.Opacity.border))
+                    )
+                    .foregroundColor(commitsAhead > 0 ? .white : .secondary)
+                }
+                .buttonStyle(.plain)
+                .disabled(isPushing)
+                .help(hasUpstream ? "Push to remote" : "Push and set upstream")
             }
         }
     }
@@ -741,6 +749,21 @@ struct GitChangesView: View {
                 self.hasUpstream = upstream
                 self.commitsAhead = ahead
             }
+        }
+    }
+
+    private func confirmAndPush() {
+        let alert = NSAlert()
+        alert.messageText = "Push to Remote"
+        alert.informativeText = hasUpstream
+            ? "Push \(commitsAhead) commit\(commitsAhead == 1 ? "" : "s") to \(gitService.currentBranch)?"
+            : "Push and set upstream for \(gitService.currentBranch)?"
+        alert.alertStyle = .informational
+        alert.addButton(withTitle: "Push")
+        alert.addButton(withTitle: "Cancel")
+        let response = alert.runModal()
+        if response == .alertFirstButtonReturn {
+            performPush()
         }
     }
 
