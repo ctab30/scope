@@ -51,6 +51,7 @@ struct ProjectWindowView: View {
         .environmentObject(claudeService)
         .environmentObject(githubService)
         .environmentObject(contextEngine)
+        .toolbarBackground(.hidden, for: .windowToolbar)
         .background(.ultraThinMaterial)
         .ignoresSafeArea()
         .background(TransparentWindowSetter(title: project?.name ?? "Project"))

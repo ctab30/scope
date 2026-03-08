@@ -104,8 +104,16 @@ final class SeamlessSplitVC2<L: View, T: View>: NSViewController, NSSplitViewDel
 
     init(leading: L, trailing: T) {
         super.init(nibName: nil, bundle: nil)
-        self.leadingController = NSHostingController(rootView: AnyView(leading))
-        self.trailingController = NSHostingController(rootView: AnyView(trailing))
+        let lc = NSHostingController(rootView: AnyView(leading))
+        let tc = NSHostingController(rootView: AnyView(trailing))
+        // Clear hosting controller backgrounds so the parent's .ultraThinMaterial
+        // shows through in the titlebar region
+        lc.view.wantsLayer = true
+        lc.view.layer?.backgroundColor = .clear
+        tc.view.wantsLayer = true
+        tc.view.layer?.backgroundColor = .clear
+        self.leadingController = lc
+        self.trailingController = tc
     }
 
     required init?(coder: NSCoder) { fatalError() }
