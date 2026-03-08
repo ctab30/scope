@@ -13,6 +13,7 @@ struct GitChangesView: View {
     @State private var pushError: String?
     @State private var commitsAhead: Int = 0
     @State private var hasUpstream: Bool = true
+    @State private var showPushConfirm = false
 
     var body: some View {
         Group {
@@ -24,6 +25,14 @@ struct GitChangesView: View {
         }
         .onAppear { scanProject() }
         .onChange(of: appState.currentProject?.id) { scanProject() }
+        .alert("Push to Remote", isPresented: $showPushConfirm) {
+            Button("Push") { performPush() }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text(hasUpstream
+                ? "Push \(commitsAhead) commit\(commitsAhead == 1 ? "" : "s") to \(gitService.currentBranch)?"
+                : "Push and set upstream for \(gitService.currentBranch)?")
+        }
     }
 
     // MARK: - Empty State
@@ -403,65 +412,75 @@ struct GitChangesView: View {
 
                 Spacer()
 
-                Button {
-                    performCommit()
-                } label: {
-                    HStack(spacing: WorkspaceTheme.Spacing.xxs) {
-                        if isCommitting {
-                            ProgressView()
-                                .controlSize(.mini)
-                                .scaleEffect(0.6)
-                        }
-                        Text("Commit")
-                            .font(WorkspaceTheme.Font.footnoteSemibold)
-                    }
-                    .padding(.horizontal, WorkspaceTheme.Spacing.md)
-                    .padding(.vertical, WorkspaceTheme.Spacing.xxs)
-                    .background(
-                        RoundedRectangle(cornerRadius: WorkspaceTheme.Radius.small)
-                            .fill(canCommit ? Color.accentColor : Color.secondary.opacity(WorkspaceTheme.Opacity.border))
-                    )
-                    .foregroundColor(canCommit ? .white : .secondary)
-                }
-                .buttonStyle(.plain)
-                .disabled(!canCommit || isCommitting)
+                commitButton
 
-                Button {
-                    confirmAndPush()
-                } label: {
-                    HStack(spacing: WorkspaceTheme.Spacing.xxs) {
-                        if isPushing {
-                            ProgressView()
-                                .controlSize(.mini)
-                                .scaleEffect(0.6)
-                        } else {
-                            Image(systemName: "arrow.up")
-                                .font(WorkspaceTheme.Font.footnoteMedium)
-                        }
-                        Text("Push")
-                            .font(WorkspaceTheme.Font.footnoteSemibold)
-                        if commitsAhead > 0 {
-                            Text("\(commitsAhead)")
-                                .font(WorkspaceTheme.Font.caption)
-                        }
-                    }
-                    .padding(.horizontal, WorkspaceTheme.Spacing.md)
-                    .padding(.vertical, WorkspaceTheme.Spacing.xxs)
-                    .background(
-                        RoundedRectangle(cornerRadius: WorkspaceTheme.Radius.small)
-                            .fill(commitsAhead > 0 ? Color.accentColor.opacity(0.8) : Color.white.opacity(0.2))
-                    )
-                    .foregroundColor(commitsAhead > 0 ? .white : .white.opacity(0.8))
-                }
-                .buttonStyle(.plain)
-                .disabled(isPushing)
-                .help(hasUpstream ? "Push to remote" : "Push and set upstream")
+                pushButton
             }
         }
     }
 
     private var canCommit: Bool {
         !gitService.stagedFiles.isEmpty && !commitMessage.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    // MARK: - Commit & Push Buttons
+
+    private var commitButton: some View {
+        Button {
+            performCommit()
+        } label: {
+            HStack(spacing: WorkspaceTheme.Spacing.xxs) {
+                if isCommitting {
+                    ProgressView()
+                        .controlSize(.mini)
+                        .scaleEffect(0.6)
+                }
+                Text("Commit")
+                    .font(WorkspaceTheme.Font.footnoteSemibold)
+            }
+            .padding(.horizontal, WorkspaceTheme.Spacing.md)
+            .padding(.vertical, WorkspaceTheme.Spacing.xxs)
+            .background(
+                RoundedRectangle(cornerRadius: WorkspaceTheme.Radius.small)
+                    .fill(canCommit ? Color.accentColor : Color.secondary.opacity(WorkspaceTheme.Opacity.border))
+            )
+            .foregroundColor(canCommit ? .white : .secondary)
+        }
+        .buttonStyle(.plain)
+        .disabled(!canCommit || isCommitting)
+    }
+
+    private var pushButton: some View {
+        Button {
+            confirmAndPush()
+        } label: {
+            HStack(spacing: WorkspaceTheme.Spacing.xxs) {
+                if isPushing {
+                    ProgressView()
+                        .controlSize(.mini)
+                        .scaleEffect(0.6)
+                } else {
+                    Image(systemName: "arrow.up")
+                        .font(WorkspaceTheme.Font.footnoteMedium)
+                }
+                Text("Push")
+                    .font(WorkspaceTheme.Font.footnoteSemibold)
+                if commitsAhead > 0 {
+                    Text("\(commitsAhead)")
+                        .font(WorkspaceTheme.Font.caption)
+                }
+            }
+            .padding(.horizontal, WorkspaceTheme.Spacing.md)
+            .padding(.vertical, WorkspaceTheme.Spacing.xxs)
+            .background(
+                RoundedRectangle(cornerRadius: WorkspaceTheme.Radius.small)
+                    .fill(commitsAhead > 0 ? Color.accentColor.opacity(0.8) : Color.white.opacity(0.2))
+            )
+            .foregroundColor(commitsAhead > 0 ? .white : .white.opacity(0.8))
+        }
+        .buttonStyle(.plain)
+        .disabled(isPushing)
+        .help(hasUpstream ? "Push to remote" : "Push and set upstream")
     }
 
     // MARK: - Section Header
@@ -753,18 +772,7 @@ struct GitChangesView: View {
     }
 
     private func confirmAndPush() {
-        let alert = NSAlert()
-        alert.messageText = "Push to Remote"
-        alert.informativeText = hasUpstream
-            ? "Push \(commitsAhead) commit\(commitsAhead == 1 ? "" : "s") to \(gitService.currentBranch)?"
-            : "Push and set upstream for \(gitService.currentBranch)?"
-        alert.alertStyle = .informational
-        alert.addButton(withTitle: "Push")
-        alert.addButton(withTitle: "Cancel")
-        let response = alert.runModal()
-        if response == .alertFirstButtonReturn {
-            performPush()
-        }
+        showPushConfirm = true
     }
 
     private func performPush() {
