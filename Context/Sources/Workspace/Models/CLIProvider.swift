@@ -19,9 +19,29 @@ enum CLIProvider: String, CaseIterable, Codable, Identifiable, Hashable {
 
     var isInstalled: Bool { Self._installed }
 
-    /// Check if Claude Code is available on the system PATH.
+    /// Check if Claude Code is available on the system.
+    /// Checks common installation paths first, then falls back to `which`.
     static func refreshInstallationStatus() async {
         let result = await Task.detached(priority: .utility) {
+            let fm = FileManager.default
+            let home = NSHomeDirectory()
+
+            // Check common installation paths first (GUI apps have limited PATH)
+            let candidates = [
+                "/usr/local/bin/claude",
+                "/opt/homebrew/bin/claude",
+                "\(home)/.npm/bin/claude",
+                "\(home)/.local/bin/claude",
+                "\(home)/.nvm/current/bin/claude",
+            ]
+
+            for path in candidates {
+                if fm.fileExists(atPath: path) {
+                    return true
+                }
+            }
+
+            // Fallback: `which claude`
             let process = Process()
             let pipe = Pipe()
             process.executableURL = URL(fileURLWithPath: "/usr/bin/which")

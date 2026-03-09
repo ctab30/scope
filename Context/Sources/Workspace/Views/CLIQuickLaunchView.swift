@@ -6,16 +6,22 @@ struct CLIQuickLaunchView: View {
     let projectPath: String
     let onLaunchCLI: (_ title: String, _ command: String) -> Void
 
-    @State private var installCacheLoaded = false
+    @State private var installCheckVersion = 0
 
     var body: some View {
         HStack(spacing: 6) {
-            let _ = installCacheLoaded
+            let _ = installCheckVersion
             claudeMenu
         }
-        .task {
+        .task(id: installCheckVersion) {
             await CLIProvider.refreshInstallationStatus()
-            installCacheLoaded = true
+            // If not installed, re-check periodically in case user installs it
+            if !CLIProvider.claude.isInstalled {
+                try? await Task.sleep(nanoseconds: 15_000_000_000) // 15s
+                if !Task.isCancelled {
+                    installCheckVersion += 1
+                }
+            }
         }
     }
 

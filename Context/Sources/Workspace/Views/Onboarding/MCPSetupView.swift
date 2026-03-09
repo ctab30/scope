@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Three-step onboarding wizard presented on first launch.
+/// Four-step onboarding wizard presented on first launch.
 /// Detects Claude Code and connects Workspace's MCP server.
 struct MCPSetupView: View {
     @Environment(\.dismiss) private var dismiss
@@ -8,7 +8,9 @@ struct MCPSetupView: View {
     @State private var currentStep = 0
     @State private var claudeStatus: CLIStatus = .checking
 
-    private enum CLIStatus {
+    private let totalSteps = 4
+
+    private enum CLIStatus: Equatable {
         case checking
         case installed
         case notInstalled
@@ -19,8 +21,9 @@ struct MCPSetupView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            // Progress dots
             HStack(spacing: WorkspaceTheme.Spacing.sm) {
-                ForEach(0..<3, id: \.self) { step in
+                ForEach(0..<totalSteps, id: \.self) { step in
                     Circle()
                         .fill(step <= currentStep ? Color.accentColor : Color.secondary.opacity(0.3))
                         .frame(width: 7, height: 7)
@@ -31,12 +34,13 @@ struct MCPSetupView: View {
 
             switch currentStep {
             case 0: welcomeStep
-            case 1: connectStep
-            case 2: doneStep
+            case 1: howItWorksStep
+            case 2: connectStep
+            case 3: readyStep
             default: EmptyView()
             }
         }
-        .frame(width: 440, height: 400)
+        .frame(width: 440, height: 460)
         .background(WorkspaceTheme.Colors.windowBg)
     }
 
@@ -46,7 +50,7 @@ struct MCPSetupView: View {
         VStack(spacing: 0) {
             Spacer()
 
-            Image(systemName: "antenna.radiowaves.left.and.right")
+            Image(systemName: "sparkles")
                 .font(.system(size: 40))
                 .foregroundStyle(Color.accentColor.gradient)
                 .padding(.bottom, WorkspaceTheme.Spacing.md)
@@ -55,7 +59,7 @@ struct MCPSetupView: View {
                 .font(WorkspaceTheme.Font.largeNumber)
                 .padding(.bottom, WorkspaceTheme.Spacing.sm)
 
-            Text("Workspace connects to Claude Code via MCP,\ngiving it project memory, tasks, notes, and more.")
+            Text("Give Claude Code persistent memory, tasks,\nnotes, and browser tools across sessions.")
                 .font(WorkspaceTheme.Font.body)
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)
@@ -63,44 +67,148 @@ struct MCPSetupView: View {
 
             Spacer()
 
+            // Feature highlights
+            VStack(alignment: .leading, spacing: WorkspaceTheme.Spacing.sm) {
+                featureRow(icon: "brain", color: .purple, text: "Project context that persists between sessions")
+                featureRow(icon: "checklist", color: .blue, text: "Track tasks and decisions as you build")
+                featureRow(icon: "globe", color: .teal, text: "Let Claude browse, click, and test your app")
+            }
+            .padding(.horizontal, 52)
+
+            Spacer()
+
             stepButton("Get Started") {
                 currentStep = 1
-                Task { await detectClaude() }
             }
         }
     }
 
-    // MARK: - Step 2: Connect
+    private func featureRow(icon: String, color: Color, text: String) -> some View {
+        HStack(spacing: WorkspaceTheme.Spacing.md) {
+            Image(systemName: icon)
+                .font(.system(size: 13, weight: .medium))
+                .foregroundColor(color)
+                .frame(width: 20, alignment: .center)
+
+            Text(text)
+                .font(WorkspaceTheme.Font.footnote)
+                .foregroundColor(.secondary)
+        }
+    }
+
+    // MARK: - Step 2: How it works
+
+    private var howItWorksStep: some View {
+        VStack(spacing: 0) {
+            Spacer()
+
+            Image(systemName: "link")
+                .font(.system(size: 40))
+                .foregroundStyle(Color.accentColor.gradient)
+                .padding(.bottom, WorkspaceTheme.Spacing.md)
+
+            Text("How it works")
+                .font(WorkspaceTheme.Font.largeNumber)
+                .padding(.bottom, WorkspaceTheme.Spacing.lg)
+
+            // Explanation rows
+            VStack(alignment: .leading, spacing: WorkspaceTheme.Spacing.lg) {
+                explanationRow(
+                    icon: "desktopcomputer",
+                    color: .blue,
+                    title: "Workspace runs a local server",
+                    desc: "A small background process on your machine — nothing leaves your computer."
+                )
+                explanationRow(
+                    icon: "arrow.left.arrow.right",
+                    color: .purple,
+                    title: "Claude Code connects via MCP",
+                    desc: "Model Context Protocol lets Claude use tools like tasks, notes, and browser."
+                )
+                explanationRow(
+                    icon: "arrow.triangle.2.circlepath",
+                    color: .teal,
+                    title: "Everything stays in sync",
+                    desc: "Changes from Claude show up in Workspace instantly, and vice versa."
+                )
+            }
+            .padding(.horizontal, 44)
+
+            Spacer()
+
+            stepButton("Set it up") {
+                currentStep = 2
+                Task { await detectAndConnect() }
+            }
+        }
+    }
+
+    private func explanationRow(icon: String, color: Color, title: String, desc: String) -> some View {
+        HStack(alignment: .top, spacing: WorkspaceTheme.Spacing.md) {
+            Image(systemName: icon)
+                .font(.system(size: 14, weight: .medium))
+                .foregroundColor(color)
+                .frame(width: 22, alignment: .center)
+                .padding(.top, 1)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(WorkspaceTheme.Font.footnoteSemibold)
+
+                Text(desc)
+                    .font(WorkspaceTheme.Font.footnote)
+                    .foregroundColor(.secondary)
+                    .lineSpacing(2)
+            }
+        }
+    }
+
+    // MARK: - Step 3: Connect
 
     private var connectStep: some View {
         VStack(spacing: 0) {
-            Text("Connect Claude Code")
+            Text("Connecting to Claude Code")
                 .font(WorkspaceTheme.Font.title)
                 .padding(.bottom, WorkspaceTheme.Spacing.xxs)
 
-            Text("Workspace will register its MCP server\nwith Claude Code on your system.")
+            Text("Workspace registers as an MCP server so Claude\ncan read and write to your project workspace.")
                 .font(WorkspaceTheme.Font.footnote)
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)
 
             Spacer()
 
-            // Claude Code status row
-            HStack(spacing: WorkspaceTheme.Spacing.md) {
-                Image(systemName: "c.circle.fill")
-                    .font(.system(size: 16))
-                    .foregroundColor(.white)
-                    .frame(width: 24)
+            // Connection status card
+            VStack(spacing: 0) {
+                HStack(spacing: WorkspaceTheme.Spacing.md) {
+                    Image(systemName: "c.circle.fill")
+                        .font(.system(size: 16))
+                        .foregroundColor(.white)
+                        .frame(width: 24)
 
-                Text("Claude Code")
-                    .font(WorkspaceTheme.Font.bodyMedium)
+                    Text("Claude Code")
+                        .font(WorkspaceTheme.Font.bodyMedium)
 
-                Spacer()
+                    Spacer()
 
-                connectBadge
+                    connectBadge
+                }
+                .padding(.horizontal, WorkspaceTheme.Spacing.md)
+                .padding(.vertical, WorkspaceTheme.Spacing.sm)
+
+                // Show hint when not installed
+                if case .notInstalled = claudeStatus {
+                    Divider()
+                        .padding(.horizontal, WorkspaceTheme.Spacing.sm)
+                    Text("Install Claude Code first, then reopen Workspace.\nnpm install -g @anthropic-ai/claude-code")
+                        .font(WorkspaceTheme.Font.footnote)
+                        .foregroundColor(.secondary.opacity(0.6))
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, WorkspaceTheme.Spacing.md)
+                        .padding(.vertical, WorkspaceTheme.Spacing.sm)
+                        .textSelection(.enabled)
+                }
             }
-            .padding(.horizontal, WorkspaceTheme.Spacing.md)
-            .padding(.vertical, WorkspaceTheme.Spacing.sm)
             .background(
                 RoundedRectangle(cornerRadius: WorkspaceTheme.Radius.small)
                     .fill(WorkspaceTheme.Colors.controlBg)
@@ -109,8 +217,16 @@ struct MCPSetupView: View {
 
             Spacer()
 
-            stepButton("Continue") {
-                currentStep = 2
+            if claudeStatus == .connected {
+                stepButton("Continue") {
+                    currentStep = 3
+                }
+            } else {
+                // Skip option — don't block onboarding
+                stepButton("Skip for Now") {
+                    currentStep = 3
+                }
+                .opacity(claudeStatus == .checking || claudeStatus == .connecting ? 0.4 : 1.0)
             }
         }
     }
@@ -119,11 +235,16 @@ struct MCPSetupView: View {
     private var connectBadge: some View {
         switch claudeStatus {
         case .checking, .connecting:
-            ProgressView()
-                .controlSize(.small)
-                .scaleEffect(0.7)
+            HStack(spacing: WorkspaceTheme.Spacing.xxs) {
+                ProgressView()
+                    .controlSize(.small)
+                    .scaleEffect(0.7)
+                Text(claudeStatus == .checking ? "Detecting..." : "Connecting...")
+                    .font(WorkspaceTheme.Font.footnote)
+                    .foregroundColor(.secondary)
+            }
         case .notInstalled:
-            Text("Not installed")
+            Text("Not found")
                 .font(WorkspaceTheme.Font.footnote)
                 .foregroundColor(.secondary.opacity(0.5))
         case .connected:
@@ -156,63 +277,93 @@ struct MCPSetupView: View {
         }
     }
 
-    // MARK: - Step 3: Done
+    // MARK: - Step 4: Ready
 
-    private var doneStep: some View {
+    private var readyStep: some View {
         VStack(spacing: 0) {
             Spacer()
 
-            Image(systemName: "checkmark.circle.fill")
-                .font(.system(size: 40))
-                .foregroundColor(.green)
-                .padding(.bottom, WorkspaceTheme.Spacing.md)
+            if case .connected = claudeStatus {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: 40))
+                    .foregroundColor(.green)
+                    .padding(.bottom, WorkspaceTheme.Spacing.md)
 
-            Text("You're all set!")
-                .font(WorkspaceTheme.Font.largeNumber)
-                .padding(.bottom, WorkspaceTheme.Spacing.xs)
+                Text("You're all set")
+                    .font(WorkspaceTheme.Font.largeNumber)
+                    .padding(.bottom, WorkspaceTheme.Spacing.xs)
+            } else {
+                Image(systemName: "arrow.right.circle.fill")
+                    .font(.system(size: 40))
+                    .foregroundStyle(Color.accentColor.gradient)
+                    .padding(.bottom, WorkspaceTheme.Spacing.md)
+
+                Text("Almost there")
+                    .font(WorkspaceTheme.Font.largeNumber)
+                    .padding(.bottom, WorkspaceTheme.Spacing.xs)
+
+                Text("Connect Claude Code from Settings when you're ready.")
+                    .font(WorkspaceTheme.Font.footnote)
+                    .foregroundColor(.secondary)
+                    .padding(.bottom, WorkspaceTheme.Spacing.sm)
+            }
+
+            Spacer()
+
+            // Usage expectations card
+            VStack(alignment: .leading, spacing: WorkspaceTheme.Spacing.sm) {
+                Text("Workspace works automatically.")
+                    .font(WorkspaceTheme.Font.footnoteSemibold)
+
+                Text("Claude Code will use these tools on its own when relevant — creating tasks, saving notes, and checking context as it works.")
+                    .font(WorkspaceTheme.Font.footnote)
+                    .foregroundColor(.secondary)
+                    .lineSpacing(2)
+
+                Text("You can also ask Claude directly:")
+                    .font(WorkspaceTheme.Font.footnote)
+                    .foregroundColor(.secondary)
+                    .padding(.top, WorkspaceTheme.Spacing.xxxs)
+
+                VStack(alignment: .leading, spacing: WorkspaceTheme.Spacing.xxs) {
+                    promptExample("\"save this as a task\"")
+                    promptExample("\"check my workspace for notes on this\"")
+                    promptExample("\"open the browser and test the login page\"")
+                }
+            }
+            .padding(WorkspaceTheme.Spacing.md)
+            .background(
+                RoundedRectangle(cornerRadius: WorkspaceTheme.Radius.small)
+                    .fill(WorkspaceTheme.Colors.controlBg)
+            )
+            .padding(.horizontal, 44)
+
+            Spacer()
 
             if case .connected = claudeStatus {
-                HStack(spacing: WorkspaceTheme.Spacing.xxs) {
-                    Image(systemName: "c.circle.fill")
-                        .foregroundColor(.white)
-                    Text("Claude Code")
-                        .font(WorkspaceTheme.Font.footnoteMedium)
-                }
-                .foregroundColor(.secondary)
-                .padding(.bottom, WorkspaceTheme.Spacing.sm)
+                Text("Start a new Claude Code session to activate.")
+                    .font(WorkspaceTheme.Font.footnote)
+                    .foregroundColor(.secondary.opacity(0.6))
+                    .padding(.bottom, WorkspaceTheme.Spacing.xs)
             }
-
-            Spacer()
-
-            VStack(alignment: .leading, spacing: 3) {
-                Text("Available MCP tools:")
-                    .font(WorkspaceTheme.Font.footnoteSemibold)
-                    .foregroundColor(.secondary)
-                    .padding(.bottom, WorkspaceTheme.Spacing.xxxs)
-                Group {
-                    Label("Task management", systemImage: "checklist")
-                    Label("Note taking", systemImage: "note.text")
-                    Label("Session history", systemImage: "clock")
-                    Label("Browser automation", systemImage: "globe")
-                    Label("Git operations", systemImage: "arrow.triangle.branch")
-                    Label("Codebase search", systemImage: "magnifyingglass")
-                }
-                .font(WorkspaceTheme.Font.footnote)
-                .foregroundColor(.secondary)
-            }
-            .padding(.horizontal, 48)
-
-            Spacer()
-
-            Text("Restart your Claude Code session to activate.")
-                .font(WorkspaceTheme.Font.footnote)
-                .foregroundColor(.secondary)
-                .padding(.bottom, WorkspaceTheme.Spacing.xs)
 
             stepButton("Done") {
                 UserDefaults.standard.set(true, forKey: "hasCompletedOnboarding")
                 dismiss()
             }
+        }
+    }
+
+    private func promptExample(_ text: String) -> some View {
+        HStack(spacing: WorkspaceTheme.Spacing.xs) {
+            Image(systemName: "chevron.right")
+                .font(.system(size: 8, weight: .bold))
+                .foregroundColor(.accentColor)
+
+            Text(text)
+                .font(WorkspaceTheme.Font.footnote)
+                .foregroundColor(.secondary)
+                .italic()
         }
     }
 
@@ -253,10 +404,40 @@ struct MCPSetupView: View {
         }.value
     }
 
-    private func detectClaude() async {
+    /// Detect Claude Code and auto-connect if found.
+    private func detectAndConnect() async {
         claudeStatus = .checking
-        let result = await shellRun("which claude")
-        claudeStatus = (result.status == 0 && !result.output.isEmpty) ? .installed : .notInstalled
+
+        // Check common install paths first (GUI apps have limited PATH)
+        let home = NSHomeDirectory()
+        let candidates = [
+            "/usr/local/bin/claude",
+            "/opt/homebrew/bin/claude",
+            "\(home)/.npm/bin/claude",
+            "\(home)/.local/bin/claude",
+            "\(home)/.nvm/current/bin/claude",
+        ]
+
+        var found = false
+        for path in candidates {
+            if FileManager.default.fileExists(atPath: path) {
+                found = true
+                break
+            }
+        }
+
+        // Fallback to which
+        if !found {
+            let result = await shellRun("which claude")
+            found = result.status == 0 && !result.output.isEmpty
+        }
+
+        if found {
+            // Auto-connect immediately
+            await connectClaude()
+        } else {
+            claudeStatus = .notInstalled
+        }
     }
 
     private func connectClaude() async {

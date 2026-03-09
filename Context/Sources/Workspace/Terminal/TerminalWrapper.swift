@@ -1,6 +1,7 @@
 import SwiftUI
 import SwiftTerm
 import AppKit
+import Foundation
 
 // MARK: - Focusable Terminal Subclass
 
@@ -102,6 +103,14 @@ final class FocusableTerminalView: LocalProcessTerminalView {
         return path
     }
 
+    // MARK: - Bell (needs-attention trigger)
+
+    override func bell(source: Terminal) {
+        // Post notification so the tab view can mark this tab as needing attention.
+        // Don't call super — we don't want NSSound.beep() for embedded terminals.
+        NotificationCenter.default.post(name: .terminalBell, object: self)
+    }
+
     // MARK: - Cmd+V Image Paste
 
     override func paste(_ sender: Any) {
@@ -153,6 +162,7 @@ struct TerminalWrapper: NSViewRepresentable {
     let isActive: Bool
     @Binding var sendCommand: String?
     var onShellStarted: ((pid_t) -> Void)?
+    var onViewCreated: ((FocusableTerminalView) -> Void)?
 
     // MARK: - Coordinator
 
@@ -283,6 +293,7 @@ struct TerminalWrapper: NSViewRepresentable {
         context.coordinator.startShell(in: initialDirectory)
         context.coordinator.installClickFocusMonitor(for: terminal)
         TerminalTracker.shared.register(terminal)
+        onViewCreated?(terminal)
 
         // Wait for the terminal frame to stabilize (NSSplitView divider
         // positioning) before sending the initial command so Claude Code

@@ -83,6 +83,9 @@ struct TerminalTabView: View {
                             if tab.id == selectedTabId {
                                 agentMonitor?.start(shellPid: pid)
                             }
+                        },
+                        onViewCreated: { view in
+                            tab.terminalView = view
                         }
                     )
                     .blendMode(.screen)
@@ -150,6 +153,16 @@ struct TerminalTabView: View {
             // Mark the current tab as needing attention when Claude exits
             if let tab = tabs.first(where: { $0.id == selectedTabId }) {
                 tab.needsAttention = true
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .terminalBell)) { notification in
+            // Mark the tab that rang the bell as needing attention
+            guard let bellView = notification.object as? NSView else { return }
+            if let tab = tabs.first(where: { $0.terminalView === bellView }) {
+                // Only flag if this tab isn't currently visible and focused
+                if tab.id != selectedTabId || !NSApp.isActive {
+                    tab.needsAttention = true
+                }
             }
         }
     }

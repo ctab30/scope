@@ -18,6 +18,11 @@ struct GitChangesView: View {
     @State private var hasUpstream: Bool = true
     @State private var showPushConfirm = false
     @State private var showPullConfirm = false
+    @State private var showNewBranch = false
+    @State private var newBranchName = ""
+    @State private var isCreatingBranch = false
+    @State private var branchError: String?
+    @State private var isGeneratingMessage = false
 
     var body: some View {
         Group {
@@ -44,6 +49,22 @@ struct GitChangesView: View {
             Text(commitsBehind > 0
                 ? "Pull \(commitsBehind) commit\(commitsBehind == 1 ? "" : "s") from \(gitService.currentBranch)?"
                 : "Pull latest changes from \(gitService.currentBranch)?")
+        }
+        .alert("New Branch", isPresented: $showNewBranch) {
+            TextField("Branch name", text: $newBranchName)
+            Button("Create") { performCreateBranch() }
+                .disabled(newBranchName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isCreatingBranch)
+            Button("Cancel", role: .cancel) { newBranchName = "" }
+        } message: {
+            Text("Create a new branch from \(gitService.currentBranch)")
+        }
+        .alert("Branch Error", isPresented: .init(
+            get: { branchError != nil },
+            set: { if !$0 { branchError = nil } }
+        )) {
+            Button("OK") { branchError = nil }
+        } message: {
+            Text(branchError ?? "")
         }
     }
 
@@ -334,6 +355,15 @@ struct GitChangesView: View {
                     }
                     .disabled(branch == gitService.currentBranch)
                 }
+
+                Divider()
+
+                Button {
+                    newBranchName = ""
+                    showNewBranch = true
+                } label: {
+                    Label("New Branch...", systemImage: "plus")
+                }
             } label: {
                 HStack(spacing: WorkspaceTheme.Spacing.xxs) {
                     Text(gitService.currentBranch)
@@ -373,9 +403,34 @@ struct GitChangesView: View {
 
     private var commitComposer: some View {
         VStack(alignment: .leading, spacing: WorkspaceTheme.Spacing.sm) {
-            Text("Commit Message")
-                .font(WorkspaceTheme.Font.footnoteSemibold)
-                .foregroundColor(.secondary)
+            HStack {
+                Text("Commit Message")
+                    .font(WorkspaceTheme.Font.footnoteSemibold)
+                    .foregroundColor(.secondary)
+
+                Spacer()
+
+                Button {
+                    generateCommitMessage()
+                } label: {
+                    HStack(spacing: WorkspaceTheme.Spacing.xxs) {
+                        if isGeneratingMessage {
+                            ProgressView()
+                                .controlSize(.mini)
+                                .scaleEffect(0.6)
+                        } else {
+                            Image(systemName: "wand.and.stars")
+                                .font(.system(size: 10))
+                        }
+                        Text("Generate")
+                            .font(WorkspaceTheme.Font.caption)
+                    }
+                    .foregroundColor(gitService.stagedFiles.isEmpty ? .secondary : .accentColor)
+                }
+                .buttonStyle(.plain)
+                .disabled(gitService.stagedFiles.isEmpty || isGeneratingMessage)
+                .help("Generate commit message with AI")
+            }
 
             TextEditor(text: $commitMessage)
                 .font(WorkspaceTheme.Font.mono)
@@ -862,6 +917,102 @@ struct GitChangesView: View {
             if success {
                 commitMessage = ""
                 refreshAheadCount()
+            }
+        }
+    }
+
+    private func performCreateBranch() {
+        let name = newBranchName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty else { return }
+        isCreatingBranch = true
+        Task {
+            let success = await gitService.createBranch(name: name)
+            isCreatingBranch = false
+            if success {
+                newBranchName = ""
+                refreshAheadCount()
+            } else {
+                branchError = "Failed to create branch '\(name)'. Check the name is valid and doesn't already exist."
+            }
+        }
+    }
+
+    private func generateCommitMessage() {
+        guard let path = appState.currentProject?.path else { return }
+        isGeneratingMessage = true
+        Task.detached {
+            // Get the staged diff
+            let diffSummary = GitChangesService.stagedDiffSummary(at: path)
+
+            // Find Claude binary
+            let fm = FileManager.default
+            let home = NSHomeDirectory()
+            let candidates = [
+                "/usr/local/bin/claude",
+                "/opt/homebrew/bin/claude",
+                "\(home)/.npm/bin/claude",
+                "\(home)/.local/bin/claude",
+                "\(home)/.nvm/current/bin/claude",
+            ]
+            var claudePath: String?
+            for candidate in candidates {
+                if fm.fileExists(atPath: candidate) {
+                    claudePath = candidate
+                    break
+                }
+            }
+
+            guard let binary = claudePath else {
+                await MainActor.run { isGeneratingMessage = false }
+                return
+            }
+
+            let prompt = """
+            Generate a concise git commit message for these changes. Return ONLY the commit message, nothing else. Use conventional commit style (e.g. "feat:", "fix:", "refactor:"). Keep it under 72 characters for the first line. If needed, add a blank line then a brief body.
+
+            \(diffSummary)
+            """
+
+            let process = Process()
+            let outputPipe = Pipe()
+            let inputPipe = Pipe()
+
+            process.executableURL = URL(fileURLWithPath: binary)
+            process.arguments = ["-p", "--output-format", "text"]
+            process.standardOutput = outputPipe
+            process.standardError = FileHandle.nullDevice
+            process.standardInput = inputPipe
+            process.environment = ProcessInfo.processInfo.environment
+
+            guard let promptData = prompt.data(using: .utf8) else {
+                await MainActor.run { isGeneratingMessage = false }
+                return
+            }
+            inputPipe.fileHandleForWriting.write(promptData)
+            inputPipe.fileHandleForWriting.closeFile()
+
+            do {
+                try process.run()
+                process.waitUntilExit()
+            } catch {
+                await MainActor.run { isGeneratingMessage = false }
+                return
+            }
+
+            guard process.terminationStatus == 0 else {
+                await MainActor.run { isGeneratingMessage = false }
+                return
+            }
+
+            let data = outputPipe.fileHandleForReading.readDataToEndOfFile()
+            let message = String(data: data, encoding: .utf8)?
+                .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+
+            await MainActor.run {
+                if !message.isEmpty {
+                    commitMessage = message
+                }
+                isGeneratingMessage = false
             }
         }
     }

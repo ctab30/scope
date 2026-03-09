@@ -1,4 +1,5 @@
 import Foundation
+import AppKit
 
 /// Observable model representing a single terminal tab.
 ///
@@ -11,6 +12,8 @@ class TerminalTab: Identifiable, ObservableObject {
     let initialDirectory: String
     let initialCommand: String?
     var shellPid: pid_t = 0
+    /// Weak reference to the backing terminal view, used to match bell notifications to tabs.
+    weak var terminalView: NSView?
 
     init(title: String = "Terminal", initialDirectory: String, initialCommand: String? = nil) {
         self.title = title

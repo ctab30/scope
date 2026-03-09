@@ -8,42 +8,54 @@ A native macOS companion for Claude Code, Gemini CLI, Codex CLI, and OpenCode
 
 ---
 
-Your AI coding agent forgets everything between sessions. Workspace fixes that. It auto-discovers your projects, tracks tasks and sessions, monitors live coding activity, and exposes project data back to your AI via MCP — creating a feedback loop where your agent knows what you're working on and can act on it.
+Your AI coding agent forgets everything between sessions. Workspace fixes that.
+
+It auto-discovers your projects, tracks tasks across sessions, monitors live coding activity, and exposes everything back to your AI via MCP — so your agent always knows what you're working on and can pick up where it left off.
 
 ## Features
 
-**Project management dashboard** — Auto-discovers all your Claude Code projects from `~/.claude/projects/`. Each project opens in its own window with an integrated terminal and tabbed GUI panel. The home view shows a global planner with tasks aggregated across all projects.
+### Project Dashboard
+Auto-discovers all your Claude Code projects from `~/.claude/projects/`. Each project opens in its own window with an integrated terminal and tabbed workspace. The home view shows a global planner with tasks aggregated across all projects. Organize projects into client groups with custom colors.
 
-**Task tracking with Kanban board** — Drag-and-drop Kanban board (Todo / In Progress / Done) per project and globally. Tasks can be created manually, extracted from emails, or created programmatically by your AI agent through the MCP server. Priority levels, labels, notes, and full task history.
+### Task Tracking
+Drag-and-drop Kanban board (Todo / In Progress / Done) per project and globally. Tasks can be created manually, extracted from emails, or created programmatically by your AI agent through the MCP server. Priority levels, labels, file attachments, notes, and full task history. Tasks auto-transition to "needs attention" when an agent session ends with work still in progress.
 
-**Live session monitoring** — Real-time mission control for active Claude Code sessions. Watches the session JSONL file and displays token usage, cost tracking, tools invoked, files touched, and a live activity feed.
+### Git & GitHub
+Full git integration with staging, unstaging, inline diffs, commit, push, and pull. Create branches directly from the branch dropdown. Generate AI-powered commit messages using Claude Code CLI — one click analyzes your staged changes and writes the message for you. See open PRs, CI/workflow status, and issues without leaving the app.
 
-**Session history** — Parses and indexes all past Claude Code sessions. Browse conversations, review tool usage patterns, and track costs over time.
+### Built-in Terminal
+Tabbed terminal emulator (SwiftTerm) embedded in each project window. Launch Claude Code sessions in multiple modes — new, resume, continue, dangermode, or verbose — from a quick-launch menu. Run commands and manage multiple tabs side by side with the GUI panel.
 
-**Built-in terminal** — Tabbed terminal emulator (SwiftTerm) embedded in each project window. Launch Claude Code sessions, run commands, manage multiple tabs — all without leaving the app.
+### Live Session Monitoring
+Real-time mission control for active Claude Code sessions. Watches session JSONL files and displays token usage, cost tracking, tools invoked, files touched, and a live activity feed. MCP connection indicator shows when your agent is actively connected.
 
-**Task launcher & dev tools** — One-click actions for common workflows: code review, debugging, writing tests, refactoring, documentation, and security audits. Detects your project's package manager and provides quick-launch buttons for dev, build, test, and lint commands.
+### Session History
+Parses and indexes all past Claude Code sessions. Browse conversations, review tool usage patterns, and track costs over time.
 
-**GitHub & Git integration** — See commits, staged changes, diffs, open PRs, and CI status. Full git visibility without leaving the app.
+### Built-in Browser
+Integrated browser with developer tools: network request monitoring, console log viewer, screenshot capture with annotation, and issue creation from browser context. Manage multiple tabs without leaving the app.
 
-**Notes** — Per-project and global notes with a rich editor. Pin important notes, search across all notes, and use them to persist context between sessions.
+### Notes
+Per-project and global notes with a rich editor. Pin important notes, search across all notes, and use them to persist context your agent can reference in future sessions.
 
-**AI image generation** — Built-in image studio for generating images with AI. Supports prompt-based generation with configurable aspect ratios and sizes.
+### Task Launcher
+One-click actions for common workflows: code review, debugging, writing tests, refactoring, documentation, and security audits. Detects your project's package manager and provides quick-launch buttons for dev, build, test, and lint commands.
 
-**And more** — GitHub integration (PRs, CI, commits, issues), CLAUDE.md editor, file browser, built-in browser with screenshot capture, Gmail integration with auto-task creation, semantic code search, chat with Claude using full project context, and agent monitoring.
+### AI Features
+Chat with Claude using full project context. Semantic code search across your codebase. Image generation studio with configurable prompts, aspect ratios, and sizes. All AI features powered through OpenRouter with a single API key.
 
 ## MCP Server
 
 Workspace includes a companion MCP server (`WorkspaceMCP`) that exposes your project data to any AI coding tool. When configured, your agent can:
 
-- List and manage tasks (create, update status, add notes)
-- Read project notes and search across them
-- Access the codebase profile and file tree
+- Read project context (tech stack, file structure, recent git activity)
+- Create and manage tasks (status updates, notes, file attachments, plans)
+- Read and search project notes
 - Query session history
-- Navigate and interact with web pages
+- Navigate and interact with web pages via the built-in browser
 - Generate images
 
-This creates a powerful loop: you manage work in Workspace, and your AI has full awareness of that work during coding sessions.
+This creates a feedback loop: you manage work in Workspace, and your AI has full awareness of that work during every coding session.
 
 ## Getting Started
 
@@ -53,7 +65,7 @@ Grab `Workspace.app` from [GitHub Releases](https://github.com/ctab30/scope/rele
 
 ### 2. Connect your CLI
 
-Click one button in the app to install the MCP server, or configure it manually:
+The app includes a guided setup wizard, or you can configure manually:
 
 <details>
 <summary><strong>Claude Code</strong></summary>
@@ -108,16 +120,16 @@ args = []
 
 ### 3. Configure
 
-Open **Settings** (`Cmd + ,`) → **AI Engine** tab and paste your [OpenRouter API key](https://openrouter.ai/keys).
+Open **Settings** (`Cmd + ,`) and paste your [OpenRouter API key](https://openrouter.ai/keys).
 
 This powers the built-in AI chat, semantic code search, and image generation. All models are served through OpenRouter with a single key.
 
 <details>
 <summary>Optional: Gmail integration</summary>
 
-To enable email-to-task sync, go to **Settings → Gmail** and enter your Google OAuth credentials (Client ID + Client Secret).
+To enable email-to-task sync, go to **Settings** and enter your Google OAuth credentials (Client ID + Client Secret).
 
-Get these from [Google Cloud Console → APIs & Services → Credentials](https://console.cloud.google.com/apis/credentials).
+Get these from [Google Cloud Console](https://console.cloud.google.com/apis/credentials).
 </details>
 
 ### 4. Code
@@ -128,7 +140,7 @@ Your AI agent now has persistent memory, task tracking, and project intelligence
 
 - macOS 14.0 (Sonoma) or later
 - [Claude Code](https://docs.anthropic.com/en/docs/claude-code), [Gemini CLI](https://github.com/google-gemini/gemini-cli), [Codex CLI](https://github.com/openai/codex), or [OpenCode](https://github.com/sst/opencode)
-- [GitHub CLI](https://cli.github.com/) (`gh`) for the GitHub tab (optional)
+- [GitHub CLI](https://cli.github.com/) (`gh`) for GitHub integration (optional)
 
 ## Building from Source
 
@@ -141,7 +153,7 @@ cp -r build/Workspace.app /Applications/
 
 ## Architecture
 
-Workspace is a pure Swift Package Manager project with two executable targets:
+Pure Swift Package Manager project with two executable targets:
 
 | Target | Description |
 |--------|-------------|

@@ -163,6 +163,10 @@ struct KanbanBoard: View {
     // MARK: - Actions
 
     private func openDetail(_ task: TaskItem) {
+        // Auto-resume: opening a needs_attention task moves it back to in_progress
+        if task.status == "needs_attention" {
+            moveTask(task, to: "in_progress")
+        }
         selectedTask = task
     }
 

@@ -156,6 +156,29 @@ class GitChangesService: ObservableObject {
         await refresh()
     }
 
+    func createBranch(name: String) async -> Bool {
+        guard let path = projectPath else { return false }
+        let result = await Task.detached {
+            GitChangesService.runGit(["checkout", "-b", name], at: path)
+        }.value
+        let success = result != nil
+        if success {
+            await refresh()
+        }
+        return success
+    }
+
+    /// Returns the staged diff summary for AI commit message generation.
+    nonisolated static func stagedDiffSummary(at path: String) -> String {
+        // Get stat summary + limited diff content
+        let stat = runGit(["diff", "--cached", "--stat"], at: path) ?? ""
+        let diff = runGit(["diff", "--cached", "--no-color"], at: path) ?? ""
+        // Truncate diff to avoid exceeding CLI input limits
+        let maxLen = 8000
+        let truncatedDiff = diff.count > maxLen ? String(diff.prefix(maxLen)) + "\n... (truncated)" : diff
+        return "Files changed:\n\(stat)\n\nDiff:\n\(truncatedDiff)"
+    }
+
     func commit(message: String) async -> Bool {
         guard let path = projectPath else { return false }
         let result = await Task.detached {
