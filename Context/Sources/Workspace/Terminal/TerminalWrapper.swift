@@ -248,18 +248,18 @@ struct TerminalWrapper: NSViewRepresentable {
             // Small delay for shell prompt readiness after frame stabilization
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
                 guard let self, let tv = self.terminalView else { return }
-                self.sendText(command + "\n")
 
-                // After Claude Code has started, nudge the frame to trigger a
-                // real PTY resize (ioctl TIOCSWINSZ → kernel SIGWINCH).
-                for delay in [1.5, 3.0] {
-                    DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak tv] in
-                        guard let tv else { return }
-                        let size = tv.frame.size
-                        guard size.width > 1 else { return }
-                        tv.setFrameSize(NSSize(width: size.width - 1, height: size.height))
-                        tv.setFrameSize(size)
-                    }
+                // Force a PTY resize so the shell picks up the correct $COLUMNS/$LINES
+                // BEFORE sending the command. This replaces the old timed nudge hack.
+                let size = tv.frame.size
+                if size.width > 1 && size.height > 1 {
+                    tv.setFrameSize(NSSize(width: size.width - 1, height: size.height))
+                    tv.setFrameSize(size)
+                }
+
+                // Send the command after the resize has been applied
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+                    self?.sendText(command + "\n")
                 }
             }
         }

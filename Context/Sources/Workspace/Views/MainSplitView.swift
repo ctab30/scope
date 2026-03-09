@@ -160,11 +160,11 @@ final class SeamlessSplitVC2<L: View, T: View>: NSViewController, NSSplitViewDel
     }
 
     func splitView(_ splitView: NSSplitView, constrainMinCoordinate proposedMinimumPosition: CGFloat, ofSubviewAt dividerIndex: Int) -> CGFloat {
-        return 350
+        return 300
     }
 
     func splitView(_ splitView: NSSplitView, constrainMaxCoordinate proposedMaximumPosition: CGFloat, ofSubviewAt dividerIndex: Int) -> CGFloat {
-        return splitView.frame.width - 350
+        return splitView.frame.width - 300
     }
 }
 
@@ -386,16 +386,16 @@ final class SeamlessSplitVC3<L: View, C: View, T: View>: NSViewController, NSSpl
             // Terminal min width ~300
             return 300
         } else {
-            // Center (task board) min width 300
-            return splitView.subviews[0].frame.width + 300
+            // Center (task board) min width 350
+            return splitView.subviews[0].frame.width + 350
         }
     }
 
     func splitView(_ splitView: NSSplitView, constrainMaxCoordinate proposedMaximumPosition: CGFloat, ofSubviewAt dividerIndex: Int) -> CGFloat {
         let width = splitView.frame.width
         if dividerIndex == 0 {
-            // Leave room for center (300) + trailing (350)
-            return width - 650
+            // Leave room for center (350) + trailing (350)
+            return width - 700
         } else {
             // Trailing panel min width 350
             return width - 350
@@ -414,6 +414,7 @@ struct WindowConfigurator: NSViewRepresentable {
         DispatchQueue.main.async {
             guard let window = view.window else { return }
             if let title { window.title = title }
+            window.minSize = NSSize(width: 1100, height: 700)
         }
         return view
     }
@@ -463,6 +464,7 @@ struct TransparentWindowSetter: NSViewRepresentable {
         window.delegate = context.coordinator
         Self.retargetZoomButton(window)
         context.coordinator.keepTitle(window: window)
+        context.coordinator.enforceMinSize(window: window)
     }
 
     private static func configureWindow(_ window: NSWindow) {
@@ -471,10 +473,17 @@ struct TransparentWindowSetter: NSViewRepresentable {
         if !window.styleMask.contains(.fullSizeContentView) {
             window.styleMask.insert(.fullSizeContentView)
         }
+        // Remove fullscreen capability entirely — prevents green button,
+        // Stage Manager drag-to-fullscreen, and gesture-based fullscreen.
+        window.collectionBehavior.remove(.fullScreenPrimary)
+        window.collectionBehavior.remove(.fullScreenAuxiliary)
+        window.collectionBehavior.insert(.fullScreenNone)
+        window.collectionBehavior.insert(.fullScreenDisallowsTiling)
         window.titlebarAppearsTransparent = true
         window.titlebarSeparatorStyle = .none
         window.isMovableByWindowBackground = true
         window.hasShadow = true
+        window.minSize = NSSize(width: 960, height: 600)
     }
 
     /// Retargets the green zoom button to perform zoom (fill screen) instead of native fullscreen.
@@ -486,21 +495,28 @@ struct TransparentWindowSetter: NSViewRepresentable {
         }
     }
 
+    static let minimumWindowSize = NSSize(width: 1100, height: 700)
+
     final class Coordinator: NSObject, NSWindowDelegate {
         var title: String = ""
         private var titleObservation: NSKeyValueObservation?
+        private var minSizeObservation: NSKeyValueObservation?
 
-        // Block native fullscreen entirely — return false so green button doesn't trigger it
-        func window(_ window: NSWindow, willUseFullScreenPresentationOptions proposedOptions: NSApplication.PresentationOptions) -> NSApplication.PresentationOptions {
-            return []
-        }
-
+        // Safety net: if macOS still tries to enter fullscreen, cancel it
         func windowWillEnterFullScreen(_ notification: Notification) {
-            // Cancel fullscreen by toggling back immediately
             guard let window = notification.object as? NSWindow else { return }
             DispatchQueue.main.async {
                 window.toggleFullScreen(nil)
             }
+        }
+
+        // Enforce minimum window size during resize
+        func windowWillResize(_ sender: NSWindow, to frameSize: NSSize) -> NSSize {
+            let minSize = TransparentWindowSetter.minimumWindowSize
+            return NSSize(
+                width: max(frameSize.width, minSize.width),
+                height: max(frameSize.height, minSize.height)
+            )
         }
 
         // Green button double-click calls windowShouldZoom — allow it (this is the fill-screen behavior we want)
@@ -513,6 +529,20 @@ struct TransparentWindowSetter: NSViewRepresentable {
                 guard let self = self else { return }
                 if let newTitle = change.newValue, newTitle != self.title {
                     DispatchQueue.main.async { w.title = self.title }
+                }
+            }
+        }
+
+        /// Watch for SwiftUI overriding minSize and re-enforce ours
+        func enforceMinSize(window: NSWindow) {
+            let minSize = TransparentWindowSetter.minimumWindowSize
+            window.minSize = minSize
+            minSizeObservation = window.observe(\.minSize, options: [.new]) { w, change in
+                if let newMin = change.newValue,
+                   (newMin.width < minSize.width || newMin.height < minSize.height) {
+                    DispatchQueue.main.async {
+                        w.minSize = minSize
+                    }
                 }
             }
         }

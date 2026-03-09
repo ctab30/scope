@@ -69,6 +69,13 @@ func openDatabase() throws -> DatabaseQueue {
         """)
     }
 
+    // Ensure indexes exist for common MCP query patterns
+    try db.write { conn in
+        try conn.execute(sql: "CREATE INDEX IF NOT EXISTS idx_taskItems_project_status ON taskItems(projectId, status)")
+        try conn.execute(sql: "CREATE INDEX IF NOT EXISTS idx_notes_project_pinned ON notes(projectId, pinned)")
+        try conn.execute(sql: "CREATE INDEX IF NOT EXISTS idx_taskNotes_taskId ON taskNotes(taskId)")
+    }
+
     return db
 }
 
@@ -323,6 +330,9 @@ struct AnyCodable: Codable {
 
 /// Writes a status file so the Workspace GUI can show an MCP connection indicator.
 class MCPConnectionStatus {
+    /// Static reference for signal handler cleanup (signal handlers can't capture instance state)
+    static var activeStatusFile: URL?
+
     let statusDir: URL
     let statusFile: URL
     let pid: Int32
@@ -339,6 +349,7 @@ class MCPConnectionStatus {
 
     func register(projectId: String?, projectName: String?, cwd: String) {
         try? FileManager.default.createDirectory(at: statusDir, withIntermediateDirectories: true)
+        MCPConnectionStatus.activeStatusFile = statusFile
         writeStatus(projectId: projectId, projectName: projectName, cwd: cwd)
     }
 
@@ -608,8 +619,8 @@ struct QueryPreprocessor {
 
 class MCPServer {
     let db: DatabaseQueue
-    let detectedProjectId: String?
-    let detectedProjectName: String?
+    var detectedProjectId: String?
+    var detectedProjectName: String?
     let workingDirectory: String
     let connectionStatus: MCPConnectionStatus
     let embeddingCache = EmbeddingCache()
@@ -685,11 +696,18 @@ class MCPServer {
         defer { connectionStatus.deregister() }
 
         // Handle SIGTERM/SIGINT for clean shutdown
+        // Note: exit() does not run Swift defer blocks, so we clean up the status file
+        // via the static reference since signal handlers can't capture instance state.
         signal(SIGTERM) { _ in
-            // Status file cleanup happens in defer
+            if let file = MCPConnectionStatus.activeStatusFile {
+                try? FileManager.default.removeItem(at: file)
+            }
             exit(0)
         }
         signal(SIGINT) { _ in
+            if let file = MCPConnectionStatus.activeStatusFile {
+                try? FileManager.default.removeItem(at: file)
+            }
             exit(0)
         }
 
@@ -715,13 +733,72 @@ class MCPServer {
         }
     }
 
+    /// Build dynamic instructions based on current project state.
+    /// These are the single source of truth for how agents should use workspace tools.
+    func buildDynamicInstructions() -> String {
+        var parts: [String] = []
+
+        // Core workflow
+        parts.append("Start with get_project_context. ALWAYS create a task with create_task(status: \"in_progress\") for any work that modifies code or produces output. The only exception is pure read-only questions.")
+
+        // When to use each tool — prescriptive, not optional
+        parts.append("")
+        parts.append("## Required workflow")
+        parts.append("- **set_task_plan**: Attach a plan BEFORE starting multi-step work. If a PLAN.md exists in the repo, attach its content.")
+        parts.append("- **add_task_note**: Log after EVERY meaningful step — commits, decisions, discoveries, blockers. Short and frequent. This is how context survives across sessions.")
+        parts.append("- **add_task_file**: EVERY analysis, review, report, or structured output you produce MUST be attached as a markdown file. Do not let deliverables exist only in the conversation.")
+        parts.append("- **complete_task**: Finish with a detailed summary. Then capture reusable knowledge (patterns, gotchas, conventions) as a project note with create_note.")
+        parts.append("- **create_note**: Project-level knowledge that outlives any single task. NOT for task progress — use add_task_note for that.")
+
+        // Inject active task state so the agent knows what's happening right away
+        if detectedProjectId == nil {
+            parts.append("")
+            parts.append("No project detected for \(workingDirectory). Use create_project to register it before creating tasks or notes.")
+        }
+
+        if let projectId = detectedProjectId {
+            if let openTasks = try? db.read({ db in
+                try TaskItem.filter(Column("projectId") == projectId)
+                    .filter(Column("status") != "done")
+                    .order(Column("priority").desc)
+                    .fetchAll(db)
+            }), !openTasks.isEmpty {
+                let inProgress = openTasks.filter { $0.status == "in_progress" }
+                let attention = openTasks.filter { $0.status == "needs_attention" }
+
+                if !inProgress.isEmpty || !attention.isEmpty {
+                    parts.append("")
+                    parts.append("ACTIVE WORK — resume these before starting new tasks:")
+                    for t in inProgress {
+                        parts.append("  [in_progress] #\(t.id ?? 0): \(t.title)")
+                    }
+                    for t in attention {
+                        parts.append("  [needs_attention] #\(t.id ?? 0): \(t.title)")
+                    }
+                    parts.append("Use get_task to load full context for these tasks.")
+                }
+
+                let todoCount = openTasks.filter { $0.status == "todo" }.count
+                if todoCount > 0 && inProgress.isEmpty && attention.isEmpty {
+                    parts.append("")
+                    parts.append("You have \(todoCount) queued task(s). Use get_next_task to pick one up.")
+                }
+            }
+        }
+
+        return parts.joined(separator: "\n")
+    }
+
     func handleRequest(_ req: JSONRPCRequest) -> [String: Any] {
         switch req.method {
         case "initialize":
-            let instructions = "Start with get_project_context. Create tasks with create_task(status: \"in_progress\"). Finish with complete_task. Use get_next_task to pick up queued work."
+            let instructions = buildDynamicInstructions()
             return successResponse(id: req.id, result: [
-                "protocolVersion": "2024-11-05",
-                "capabilities": ["tools": [:]],
+                "protocolVersion": "2025-03-26",
+                "capabilities": [
+                    "tools": [:],
+                    "resources": [:],
+                ],
                 "serverInfo": ["name": "workspace", "version": "2.0.0"],
                 "instructions": instructions
             ])
@@ -732,10 +809,17 @@ class MCPServer {
         case "tools/list":
             let allTools = toolDefinitions()
             let filtered = filterToolsByTier(allTools)
-            return successResponse(id: req.id, result: ["tools": filtered])
+            let annotated = addToolAnnotations(filtered)
+            return successResponse(id: req.id, result: ["tools": annotated])
 
         case "tools/call":
             return handleToolCall(req)
+
+        case "resources/list":
+            return handleResourcesList(req)
+
+        case "resources/read":
+            return handleResourcesRead(req)
 
         default:
             return errorResponse(id: req.id, code: -32601, message: "Method not found: \(req.method)")
@@ -764,6 +848,7 @@ class MCPServer {
 
         let standardTools = coreTool.union([
             "list_projects",
+            "create_project",
             "list_task_notes",
             "set_task_plan",
             "get_task_plan",
@@ -792,6 +877,167 @@ class MCPServer {
             guard let name = tool["name"] as? String else { return false }
             return allowedTools.contains(name)
         }
+    }
+
+    /// Add MCP tool annotations (readOnlyHint, destructiveHint, idempotentHint) per the 2025-03-26 spec.
+    /// Helps clients decide auto-approval and risk assessment.
+    func addToolAnnotations(_ tools: [[String: Any]]) -> [[String: Any]] {
+        let readOnly: Set<String> = [
+            "get_current_project", "get_project_context", "list_projects",
+            "list_tasks", "get_task", "get_next_task", "search_tasks",
+            "list_task_notes", "get_task_plan",
+            "list_notes", "get_note", "search_notes",
+            "list_clients",
+            "browser_snapshot", "browser_extract", "browser_list_tabs",
+            "browser_console_logs", "browser_screenshot", "browser_get_cookies",
+            "browser_get_storage",
+            "git_status", "git_diff", "git_log",
+            "get_network_requests", "get_request_detail",
+            "detect_services", "list_env_files", "get_env_variables",
+            "context_search",
+        ]
+        let destructive: Set<String> = [
+            "delete_note",
+            "browser_clear_session",
+            "clear_network_log",
+            "git_push",
+        ]
+
+        return tools.map { tool in
+            guard let name = tool["name"] as? String else { return tool }
+            var annotated = tool
+            var annotations: [String: Any] = [:]
+
+            if readOnly.contains(name) {
+                annotations["readOnlyHint"] = true
+            }
+            if destructive.contains(name) {
+                annotations["destructiveHint"] = true
+            }
+            // Idempotent: tools that produce the same result on repeat calls
+            if readOnly.contains(name) || ["update_task", "update_note", "set_task_plan"].contains(name) {
+                annotations["idempotentHint"] = true
+            }
+
+            if !annotations.isEmpty {
+                annotated["annotations"] = annotations
+            }
+            return annotated
+        }
+    }
+
+    // MARK: - Resource Handlers
+
+    /// List available MCP resources. Exposes project context so it loads automatically into the AI's context.
+    func handleResourcesList(_ req: JSONRPCRequest) -> [String: Any] {
+        var resources: [[String: Any]] = []
+
+        if detectedProjectId != nil, let name = detectedProjectName {
+            resources.append([
+                "uri": "workspace://project/context",
+                "name": "Project Context: \(name)",
+                "description": "Current project state including tech stack, git info, open tasks, and pinned notes. Loaded automatically at session start.",
+                "mimeType": "text/markdown",
+                "annotations": [
+                    "audience": ["assistant"],
+                    "priority": 1.0,
+                ],
+            ])
+            resources.append([
+                "uri": "workspace://project/tasks",
+                "name": "Active Tasks: \(name)",
+                "description": "All open tasks for the current project with status and priority.",
+                "mimeType": "text/markdown",
+                "annotations": [
+                    "audience": ["assistant"],
+                    "priority": 0.8,
+                ],
+            ])
+        }
+
+        return successResponse(id: req.id, result: ["resources": resources])
+    }
+
+    /// Read a specific MCP resource by URI.
+    func handleResourcesRead(_ req: JSONRPCRequest) -> [String: Any] {
+        let params = req.params ?? [:]
+        guard let uri = params["uri"]?.value as? String else {
+            return errorResponse(id: req.id, code: -32602, message: "Missing uri parameter")
+        }
+
+        do {
+            let content: String
+            switch uri {
+            case "workspace://project/context":
+                content = try getProjectContext()
+            case "workspace://project/tasks":
+                content = try getActiveTasksSummary()
+            default:
+                return errorResponse(id: req.id, code: -32602, message: "Unknown resource: \(uri)")
+            }
+            return successResponse(id: req.id, result: [
+                "contents": [
+                    ["uri": uri, "mimeType": "text/markdown", "text": content]
+                ]
+            ])
+        } catch {
+            return errorResponse(id: req.id, code: -32603, message: "Resource read error: \(error.localizedDescription)")
+        }
+    }
+
+    /// Returns a summary of active tasks for resource reads and tool response enrichment.
+    func getActiveTasksSummary() throws -> String {
+        guard let projectId = detectedProjectId else {
+            return "No project detected."
+        }
+
+        let openTasks = try db.read { db in
+            try TaskItem.filter(Column("projectId") == projectId)
+                .filter(Column("status") != "done")
+                .order(Column("priority").desc, Column("createdAt").desc)
+                .fetchAll(db)
+        }
+
+        guard !openTasks.isEmpty else {
+            return "No open tasks. Use create_task to start tracking work."
+        }
+
+        var lines: [String] = ["# Active Tasks (\(openTasks.count))"]
+        let grouped: [(String, [TaskItem])] = [
+            ("In Progress", openTasks.filter { $0.status == "in_progress" }),
+            ("Needs Attention", openTasks.filter { $0.status == "needs_attention" }),
+            ("Todo", openTasks.filter { $0.status == "todo" }),
+        ]
+
+        for (label, tasks) in grouped where !tasks.isEmpty {
+            lines.append("## \(label)")
+            for t in tasks {
+                let priority = t.priority > 0 ? " [P\(t.priority)]" : ""
+                lines.append("- #\(t.id ?? 0): \(t.title)\(priority)")
+            }
+        }
+        return lines.joined(separator: "\n")
+    }
+
+    /// Build a compact task context footer to append to tool responses.
+    /// This keeps the AI aware of active tasks and encourages continued MCP usage.
+    func activeTaskContextFooter() -> String? {
+        guard let projectId = detectedProjectId else { return nil }
+
+        guard let inProgress = try? db.read({ db in
+            try TaskItem.filter(Column("projectId") == projectId)
+                .filter(Column("status") == "in_progress")
+                .order(Column("priority").desc)
+                .limit(3)
+                .fetchAll(db)
+        }), !inProgress.isEmpty else { return nil }
+
+        var footer = "\n---\nActive tasks:"
+        for t in inProgress {
+            footer += " #\(t.id ?? 0) \(t.title);"
+        }
+        footer += "\nLog this step: add_task_note | Save output: add_task_file | Done: complete_task"
+        return footer
     }
 
     // MARK: - Tool Definitions
@@ -823,8 +1069,20 @@ class MCPServer {
                 ]
             ],
             [
+                "name": "create_project",
+                "description": "Register a new project in Workspace. Use when the current working directory is not tracked. Enables task tracking, notes, and context for the project.",
+                "inputSchema": [
+                    "type": "object",
+                    "properties": [
+                        "name": ["type": "string", "description": "Project name"],
+                        "path": ["type": "string", "description": "Absolute path to the project root (defaults to current working directory)"],
+                    ],
+                    "required": ["name"]
+                ]
+            ],
+            [
                 "name": "list_tasks",
-                "description": "List tasks for this project. ALWAYS call this when asked about tasks, todos, or work items. Returns task ID, title, status, priority, and description. project_id is auto-detected from working directory if omitted.",
+                "description": "List tasks for this project, optionally filtered by status. Use for overview and browsing. For picking up the next actionable task, use get_next_task instead. project_id is auto-detected.",
                 "inputSchema": [
                     "type": "object",
                     "properties": [
@@ -857,13 +1115,14 @@ class MCPServer {
                         "labels": ["type": "array", "items": ["type": "string"], "description": "Labels: bug, feature, hotfix, refactor, test, docs, performance, security, design, devops"],
                         "status": ["type": "string", "description": "Initial status. Use 'in_progress' to start immediately.", "enum": ["todo", "in_progress"]],
                         "force": ["type": "boolean", "description": "Create even if similar tasks exist"],
+                        "session_id": ["type": "string", "description": "Session ID for tracking which session created the task (optional)"],
                     ],
                     "required": ["title", "description", "priority", "labels"]
                 ]
             ],
             [
                 "name": "update_task",
-                "description": "Update a task's fields. Call with status='in_progress' when starting work on a task. Call with status='done' when complete. Set status='needs_attention' when blocked or waiting for user input.",
+                "description": "Update a task's fields (status, priority, title, description, labels). Use to start work (status='in_progress') or flag blockers (status='needs_attention'). Do NOT use status='done' — use complete_task instead for proper completion tracking with summary.",
                 "inputSchema": [
                     "type": "object",
                     "properties": [
@@ -879,7 +1138,7 @@ class MCPServer {
             ],
             [
                 "name": "add_task_note",
-                "description": "Add a note/comment to a task. Use this to log progress, decisions, or context.",
+                "description": "Add a progress note to a task. Call this after EVERY meaningful step: commits, design decisions, bug discoveries, blockers, completed milestones. This is how context survives across sessions — without notes, the next session starts blind. Keep notes short and frequent. Task-scoped; for project-wide knowledge use create_note.",
                 "inputSchema": [
                     "type": "object",
                     "properties": [
@@ -892,7 +1151,7 @@ class MCPServer {
             ],
             [
                 "name": "list_task_notes",
-                "description": "List all notes for a task.",
+                "description": "List all notes for a task (task-scoped). These are progress entries logged during task work.",
                 "inputSchema": [
                     "type": "object",
                     "properties": [
@@ -903,7 +1162,7 @@ class MCPServer {
             ],
             [
                 "name": "set_task_plan",
-                "description": "Attach or update an execution plan (markdown) on a task. Saves as a .md file visible in the GUI. Use for step-by-step plans before starting work.",
+                "description": "Attach or update an execution plan (markdown) on a task. Saves as a .md file visible in the GUI. ALWAYS call this before starting multi-step work. If a PLAN.md file exists in the repo, attach its content here so the task carries the plan.",
                 "inputSchema": [
                     "type": "object",
                     "properties": [
@@ -926,7 +1185,7 @@ class MCPServer {
             ],
             [
                 "name": "add_task_file",
-                "description": "Attach a markdown file to a task. Use for reports, analysis, reviews, or any structured document. The file is visible and readable in the Workspace GUI.",
+                "description": "Attach a markdown file to a task. EVERY analysis, review, report, audit, plan, or structured output you produce MUST be saved here — do not let deliverables exist only in the conversation. The file is visible and readable in the Workspace GUI. Task-scoped.",
                 "inputSchema": [
                     "type": "object",
                     "properties": [
@@ -939,7 +1198,7 @@ class MCPServer {
             ],
             [
                 "name": "list_notes",
-                "description": "List all project-level notes. These are rich notes (title + content) for capturing project context, decisions, patterns, and reference material. project_id is auto-detected from working directory if omitted.",
+                "description": "List all project-level notes (project-scoped). These are knowledge entries that outlive any single task — architecture decisions, conventions, patterns, reference material. project_id is auto-detected.",
                 "inputSchema": [
                     "type": "object",
                     "properties": [
@@ -962,7 +1221,7 @@ class MCPServer {
             ],
             [
                 "name": "create_note",
-                "description": "Create a new project-level note. Use for capturing architectural decisions, discovered patterns, session learnings, or any context that should persist. project_id is auto-detected from working directory if omitted.",
+                "description": "Create a project-level note for knowledge that outlives any single task: architecture decisions, coding conventions, environment setup, recurring issues, or patterns discovered. Do NOT use for task-specific progress — use add_task_note for that. Check search_notes first to avoid duplicating existing notes. project_id is auto-detected.",
                 "inputSchema": [
                     "type": "object",
                     "properties": [
@@ -972,6 +1231,7 @@ class MCPServer {
                         "pinned": ["type": "boolean", "description": "Pin this note to the top (default: false)"],
                         "session_id": ["type": "string", "description": "Claude session ID that created this note (optional)"],
                         "global": ["type": "boolean", "description": "Set true to create a global planner note"],
+                        "force": ["type": "boolean", "description": "Create even if similar notes exist (default: false)"],
                     ],
                     "required": ["title"]
                 ]
@@ -1396,7 +1656,7 @@ class MCPServer {
             ],
             [
                 "name": "git_commit",
-                "description": "Create a git commit with the currently staged changes.",
+                "description": "Stage files first with git_stage. Create a git commit with the currently staged changes.",
                 "inputSchema": [
                     "type": "object",
                     "properties": [
@@ -1521,7 +1781,7 @@ class MCPServer {
             // MARK: - Smart Task Tools
             [
                 "name": "get_next_task",
-                "description": "Get the highest-priority actionable task. Returns the most important non-blocked task that needs work. Use when starting a session or when unsure what to work on next.",
+                "description": "Get the highest-priority non-blocked task to work on next. Returns full context including plan and recent notes. Use when starting a session or finishing a task — prefer this over list_tasks when you need to pick up work. project_id is auto-detected.",
                 "inputSchema": [
                     "type": "object",
                     "properties": [
@@ -1544,7 +1804,7 @@ class MCPServer {
             ],
             [
                 "name": "complete_task",
-                "description": "Mark a task as done with a completion summary. Preferred over update_task for finishing work — captures what was accomplished for future reference.",
+                "description": "Mark a task as done with a completion summary. Preferred over update_task for finishing work. Include key changes, files modified, and decisions made. If you discovered reusable project knowledge during this task, also create a project-level note with create_note.",
                 "inputSchema": [
                     "type": "object",
                     "properties": [
@@ -1572,6 +1832,7 @@ class MCPServer {
             case "get_current_project": result = try getCurrentProject()
             case "get_project_context": result = try getProjectContext()
             case "list_projects":    result = try listProjects()
+            case "create_project":   result = try createProject(args)
             case "list_tasks":       result = try listTasks(args)
             case "get_task":         result = try getTask(args)
             case "create_task":      result = try createTask(args)
@@ -1638,8 +1899,23 @@ class MCPServer {
                 return errorResponse(id: req.id, code: -32602, message: "Unknown tool: \(toolName)")
             }
 
+            // Enrich responses with active task context footer.
+            // Skip for tools that already return task context to avoid redundancy.
+            let skipFooterTools: Set<String> = [
+                "get_project_context", "list_tasks", "get_task", "create_task",
+                "update_task", "add_task_note", "list_task_notes",
+                "complete_task", "get_next_task", "search_tasks",
+                "set_task_plan", "get_task_plan", "add_task_file",
+            ]
+            let enrichedResult: String
+            if !skipFooterTools.contains(toolName), let footer = activeTaskContextFooter() {
+                enrichedResult = result + footer
+            } else {
+                enrichedResult = result
+            }
+
             return successResponse(id: req.id, result: [
-                "content": [["type": "text", "text": result]]
+                "content": [["type": "text", "text": enrichedResult]]
             ])
         } catch {
             return successResponse(id: req.id, result: [
@@ -1707,13 +1983,13 @@ class MCPServer {
             sections.append("Stack: \(techStack.joined(separator: ", "))")
         }
 
-        // Git context (branch + recent commits, compact)
-        let gitBranch = shell("git -C \"\(workingDirectory)\" branch --show-current 2>/dev/null").trimmingCharacters(in: .whitespacesAndNewlines)
-        if !gitBranch.isEmpty {
+        // Git context (branch + recent commits, compact) — uses runGit to avoid shell injection
+        let branchResult = runGit(["branch", "--show-current"], at: workingDirectory)
+        if let gitBranch = branchResult.output?.trimmingCharacters(in: .whitespacesAndNewlines), !gitBranch.isEmpty {
             sections.append("Branch: \(gitBranch)")
         }
-        let gitLog = shell("git -C \"\(workingDirectory)\" log --oneline -5 2>/dev/null")
-        if !gitLog.isEmpty {
+        let logResult = runGit(["log", "--oneline", "-5"], at: workingDirectory)
+        if let gitLog = logResult.output?.trimmingCharacters(in: .whitespacesAndNewlines), !gitLog.isEmpty {
             sections.append("Recent commits:\n\(gitLog)")
         }
         sections.append("")
@@ -1816,6 +2092,39 @@ class MCPServer {
         return lines.joined(separator: "\n")
     }
 
+    func createProject(_ args: [String: Any]) throws -> String {
+        guard let name = args["name"] as? String, !name.isEmpty else {
+            throw MCPError(message: "name is required")
+        }
+        let rawPath = args["path"] as? String ?? ""
+        let path = rawPath.isEmpty ? workingDirectory : rawPath
+
+        // Check-and-insert in a single write transaction to prevent TOCTOU race
+        let projectId = UUID().uuidString
+        let (project, wasExisting) = try db.write { db -> (Project, Bool) in
+            if let existing = try Project.filter(Column("path") == path).fetchOne(db) {
+                return (existing, true)
+            }
+            try db.execute(
+                sql: "INSERT INTO projects (id, name, path) VALUES (?, ?, ?)",
+                arguments: [projectId, name, path]
+            )
+            guard let created = try Project.filter(Column("id") == projectId).fetchOne(db) else {
+                throw MCPError(message: "Failed to create project")
+            }
+            return (created, false)
+        }
+
+        detectedProjectId = project.id
+        detectedProjectName = project.name
+
+        if wasExisting {
+            return "Project already exists: [\(project.id)] \(project.name) — \(project.path)\nNow using this project for the session."
+        } else {
+            return "Created project: [\(project.id)] \(project.name) — \(project.path)\nNow using this project for the session. You can create tasks and notes for it."
+        }
+    }
+
     func listTasks(_ args: [String: Any]) throws -> String {
         let projectId = try resolveProjectId(args)
         let statusFilter = args["status"] as? String
@@ -1833,7 +2142,7 @@ class MCPServer {
 
         var lines = ["Tasks (\(tasks.count)):"]
         for t in tasks {
-            let priority = ["none", "low", "medium", "high", "urgent"][min(t.priority, 4)]
+            let priority = ["none", "low", "medium", "high", "urgent"][max(min(t.priority, 4), 0)]
             let labels = t.labels.flatMap { l -> String? in
                 guard let data = l.data(using: .utf8),
                       let arr = try? JSONDecoder().decode([String].self, from: data)
@@ -1888,7 +2197,7 @@ class MCPServer {
         var lines = [
             "Task #\(task.id ?? 0): \(task.title)",
             "Status: \(task.status)",
-            "Priority: \(["none", "low", "medium", "high", "urgent"][min(task.priority, 4)])",
+            "Priority: \(["none", "low", "medium", "high", "urgent"][max(min(task.priority, 4), 0)])",
             "Created: \(task.createdAt)",
         ]
         if let completedAt = task.completedAt { lines.append("Completed: \(completedAt)") }
@@ -1981,7 +2290,7 @@ class MCPServer {
             description: description,
             status: initialStatus,
             priority: min(max(priority, 0), 4),
-            sourceSession: nil,
+            sourceSession: args["session_id"] as? String,
             source: "claude",
             createdAt: Date(),
             completedAt: nil,
@@ -2002,6 +2311,29 @@ class MCPServer {
         if initialStatus == "in_progress" {
             result += " [in_progress]"
         }
+
+        // Surface related project notes so agent has context before starting
+        let relatedNotes = try db.read { db in
+            try Note.filter(Column("projectId") == projectId)
+                .select(Column("id"), Column("title"))
+                .fetchAll(db)
+        }
+        var noteMatches: [(Int64, String, Double)] = []
+        for n in relatedNotes {
+            let score = tokenOverlap(title, n.title)
+            if score > 0.3 {
+                noteMatches.append((n.id ?? 0, n.title, score))
+            }
+        }
+        noteMatches.sort { $0.2 > $1.2 }
+        if !noteMatches.isEmpty {
+            result += "\n\nRelated project notes:"
+            for m in noteMatches.prefix(3) {
+                result += "\n  📝 #\(m.0) \(m.1)"
+            }
+            result += "\nUse get_note to review relevant context before starting work."
+        }
+
         return result
     }
 
@@ -2303,7 +2635,7 @@ class MCPServer {
         var lines = [
             "## Next Task: #\(nextId)",
             "**\(next.title)**",
-            "Priority: \(["none", "low", "medium", "high", "urgent"][min(next.priority, 4)])",
+            "Priority: \(["none", "low", "medium", "high", "urgent"][max(min(next.priority, 4), 0)])",
             "Status: \(next.status)",
         ]
         if let desc = next.description { lines.append("\nDescription:\n\(desc)") }
@@ -2420,7 +2752,28 @@ class MCPServer {
         // Clear active task tracking since task is done
         trackActiveTask(taskId: Int64(taskId), status: "done")
 
-        return "Task #\(taskId) completed: \(task.title)"
+        // Check task richness — nudge if sparse
+        let noteCount = try db.read { db in
+            try TaskNote.filter(Column("taskId") == Int64(taskId)).fetchCount(db)
+        }
+        let taskFilesDir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+            .appendingPathComponent("Workspace/task-files/\(taskId)")
+        let fileCount = (try? FileManager.default.contentsOfDirectory(atPath: taskFilesDir.path).count) ?? 0
+
+        var result = "Task #\(taskId) completed: \(task.title)"
+
+        // Specific nudges based on what's missing
+        var nudges: [String] = []
+        if noteCount <= 1 { // 1 because the completion note itself was just added
+            nudges.append("This task has no progress notes. Next time, use add_task_note after each step so context survives across sessions.")
+        }
+        if fileCount == 0 {
+            nudges.append("No files were attached. If you produced any analysis, reviews, or reports during this task, attach them now with add_task_file before moving on.")
+        }
+        nudges.append("If you discovered reusable knowledge (patterns, conventions, gotchas), capture it with create_note.")
+
+        result += "\n\n" + nudges.joined(separator: "\n")
+        return result
     }
 
     // MARK: - Attachments Array Helpers
@@ -2523,7 +2876,31 @@ class MCPServer {
         let content = args["content"] as? String ?? ""
         let pinned = args["pinned"] as? Bool ?? false
         let sessionId = args["session_id"] as? String
+        let force = args["force"] as? Bool ?? false
         let now = Date()
+
+        // Check for similar existing notes — block creation unless force=true
+        if !force {
+            var similarNotes: [String] = []
+            let existingNotes = try db.read { db in
+                try Note.filter(Column("projectId") == projectId)
+                    .fetchAll(db)
+            }
+            for existing in existingNotes {
+                let jwScore = jaroWinklerSimilarity(title, existing.title)
+                let tokenScore = tokenOverlap(title, existing.title)
+                if jwScore > 0.7 || tokenScore > 0.6 {
+                    let matchPct = Int(max(jwScore, tokenScore) * 100)
+                    similarNotes.append("#\(existing.id ?? 0) \"\(existing.title)\" (\(matchPct)% similar)")
+                }
+            }
+            if !similarNotes.isEmpty {
+                var result = "Similar notes already exist — update instead of creating a duplicate:\n"
+                for s in similarNotes { result += "  \(s)\n" }
+                result += "Use update_note to merge content, or pass force=true to create anyway."
+                return result
+            }
+        }
 
         var note = Note(
             id: nil,
@@ -3039,7 +3416,7 @@ class MCPServer {
     func gitLog(_ args: [String: Any]) throws -> String {
         let path = try resolveProjectPath(args)
         let count = min(args["count"] as? Int ?? 15, 50)
-        var gitArgs = ["log", "--format=%H|%h|%s|%an|%ar", "-\(count)"]
+        var gitArgs = ["log", "--format=%H\u{1F}%h\u{1F}%s\u{1F}%an\u{1F}%ar", "-\(count)"]
         if let filePath = args["file_path"] as? String {
             gitArgs.append(contentsOf: ["--", filePath])
         }
@@ -3053,7 +3430,7 @@ class MCPServer {
         let lines = (result.output ?? "").components(separatedBy: "\n")
         for line in lines {
             guard !line.isEmpty else { continue }
-            let parts = line.components(separatedBy: "|")
+            let parts = line.components(separatedBy: "\u{1F}")
             guard parts.count >= 5 else { continue }
             commits.append([
                 "sha": parts[0],
@@ -3118,7 +3495,10 @@ class MCPServer {
             throw MCPError(message: "git commit failed: \(result.output ?? "nothing to commit?")")
         }
 
-        return result.output ?? "Committed successfully"
+        var output = result.output ?? "Committed successfully"
+        // Nudge agent to log the commit as a task note
+        output += "\n\nLog this commit as a task note with add_task_note so it's captured in the task timeline."
+        return output
     }
 
     func gitPush(_ args: [String: Any]) throws -> String {
@@ -3262,10 +3642,15 @@ class MCPServer {
         let showValues = args["show_values"] as? Bool ?? false
 
         let fullPath = (path as NSString).appendingPathComponent(fileName)
-        guard FileManager.default.fileExists(atPath: fullPath) else {
+        // Prevent path traversal — resolved path must stay within project root
+        let resolvedPath = URL(fileURLWithPath: fullPath).standardized.path
+        guard resolvedPath.hasPrefix(path) else {
+            throw MCPError(message: "file_name must be within the project directory")
+        }
+        guard FileManager.default.fileExists(atPath: resolvedPath) else {
             throw MCPError(message: "File not found: \(fileName)")
         }
-        guard let contents = try? String(contentsOfFile: fullPath, encoding: .utf8) else {
+        guard let contents = try? String(contentsOfFile: resolvedPath, encoding: .utf8) else {
             throw MCPError(message: "Could not read file: \(fileName)")
         }
 

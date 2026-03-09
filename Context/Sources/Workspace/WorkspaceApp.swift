@@ -316,6 +316,7 @@ struct WorkspaceApp: App {
                 }
         }
         .defaultSize(width: 1400, height: 900)
+
         .commands {
             CommandGroup(replacing: .newItem) {
                 Button("New Terminal Tab") {
@@ -345,6 +346,7 @@ struct WorkspaceApp: App {
             }
         }
         .defaultSize(width: 1400, height: 900)
+
 
         Settings {
             SettingsView(settings: appSettings)

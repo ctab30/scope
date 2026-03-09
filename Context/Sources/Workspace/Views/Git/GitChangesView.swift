@@ -10,10 +10,14 @@ struct GitChangesView: View {
     @State private var collapsedSections: Set<String> = []
     @State private var isCommitting = false
     @State private var isPushing = false
+    @State private var isPulling = false
     @State private var pushError: String?
+    @State private var pullError: String?
     @State private var commitsAhead: Int = 0
+    @State private var commitsBehind: Int = 0
     @State private var hasUpstream: Bool = true
     @State private var showPushConfirm = false
+    @State private var showPullConfirm = false
 
     var body: some View {
         Group {
@@ -32,6 +36,14 @@ struct GitChangesView: View {
             Text(hasUpstream
                 ? "Push \(commitsAhead) commit\(commitsAhead == 1 ? "" : "s") to \(gitService.currentBranch)?"
                 : "Push and set upstream for \(gitService.currentBranch)?")
+        }
+        .alert("Pull from Remote", isPresented: $showPullConfirm) {
+            Button("Pull") { performPull() }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text(commitsBehind > 0
+                ? "Pull \(commitsBehind) commit\(commitsBehind == 1 ? "" : "s") from \(gitService.currentBranch)?"
+                : "Pull latest changes from \(gitService.currentBranch)?")
         }
     }
 
@@ -414,6 +426,8 @@ struct GitChangesView: View {
 
                 commitButton
 
+                pullButton
+
                 pushButton
             }
         }
@@ -481,6 +495,39 @@ struct GitChangesView: View {
         .buttonStyle(.plain)
         .disabled(isPushing)
         .help(hasUpstream ? "Push to remote" : "Push and set upstream")
+    }
+
+    private var pullButton: some View {
+        Button {
+            showPullConfirm = true
+        } label: {
+            HStack(spacing: WorkspaceTheme.Spacing.xxs) {
+                if isPulling {
+                    ProgressView()
+                        .controlSize(.mini)
+                        .scaleEffect(0.6)
+                } else {
+                    Image(systemName: "arrow.down")
+                        .font(WorkspaceTheme.Font.footnoteMedium)
+                }
+                Text("Pull")
+                    .font(WorkspaceTheme.Font.footnoteSemibold)
+                if commitsBehind > 0 {
+                    Text("\(commitsBehind)")
+                        .font(WorkspaceTheme.Font.caption)
+                }
+            }
+            .padding(.horizontal, WorkspaceTheme.Spacing.md)
+            .padding(.vertical, WorkspaceTheme.Spacing.xxs)
+            .background(
+                RoundedRectangle(cornerRadius: WorkspaceTheme.Radius.small)
+                    .fill(commitsBehind > 0 ? Color.accentColor.opacity(0.8) : Color.white.opacity(0.2))
+            )
+            .foregroundColor(commitsBehind > 0 ? .white : .white.opacity(0.8))
+        }
+        .buttonStyle(.plain)
+        .disabled(isPulling || !hasUpstream)
+        .help("Pull from remote")
     }
 
     // MARK: - Section Header
@@ -764,9 +811,11 @@ struct GitChangesView: View {
         Task.detached {
             let upstream = GitChangesService.hasUpstream(at: path, branch: branch)
             let ahead = upstream ? GitChangesService.commitsAhead(at: path) : 0
+            let behind = upstream ? GitChangesService.commitsBehind(at: path) : 0
             await MainActor.run {
                 self.hasUpstream = upstream
                 self.commitsAhead = ahead
+                self.commitsBehind = behind
             }
         }
     }
@@ -785,6 +834,20 @@ struct GitChangesView: View {
                 refreshAheadCount()
             } else {
                 pushError = result.message
+            }
+        }
+    }
+
+    private func performPull() {
+        isPulling = true
+        pullError = nil
+        Task {
+            let result = await gitService.pull()
+            isPulling = false
+            if result.success {
+                refreshAheadCount()
+            } else {
+                pullError = result.message
             }
         }
     }

@@ -213,6 +213,42 @@ class GitChangesService: ObservableObject {
         return Int(output.trimmingCharacters(in: .whitespacesAndNewlines)) ?? 0
     }
 
+    /// Returns the number of commits behind the upstream (0 if up-to-date or no upstream).
+    nonisolated static func commitsBehind(at path: String) -> Int {
+        // Fetch latest from remote first (lightweight, updates tracking refs only)
+        _ = runGit(["fetch", "--quiet"], at: path)
+        guard let output = runGit(["rev-list", "--count", "HEAD..@{u}"], at: path) else { return 0 }
+        return Int(output.trimmingCharacters(in: .whitespacesAndNewlines)) ?? 0
+    }
+
+    func pull() async -> (success: Bool, message: String) {
+        guard let path = projectPath else { return (false, "No project path") }
+        let result = await Task.detached { () -> (String?, Int32) in
+            let process = Process()
+            let pipe = Pipe()
+            process.executableURL = URL(fileURLWithPath: "/usr/bin/git")
+            process.arguments = ["pull"]
+            process.currentDirectoryURL = URL(fileURLWithPath: path)
+            process.standardOutput = pipe
+            process.standardError = pipe
+            do {
+                try process.run()
+                process.waitUntilExit()
+                let data = pipe.fileHandleForReading.readDataToEndOfFile()
+                let output = String(data: data, encoding: .utf8)
+                return (output, process.terminationStatus)
+            } catch {
+                return (error.localizedDescription, -1)
+            }
+        }.value
+        if result.1 == 0 {
+            await refresh()
+            return (true, result.0?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "Pulled successfully")
+        } else {
+            return (false, result.0?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "Pull failed")
+        }
+    }
+
     func loadDiff(for file: GitFileChange) {
         guard let path = projectPath else { return }
         Task {

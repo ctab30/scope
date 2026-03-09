@@ -20,27 +20,6 @@ enum LaunchTaskKey {
 ///
 /// Listens for `.launchTask` notifications from the GUI side to create new
 /// tabs that auto-run Claude commands.
-/// AppKit `NSVisualEffectView` wrapped for SwiftUI — provides the
-/// frosted-glass / vibrancy backdrop behind the terminal.
-struct TerminalVibrancyView: NSViewRepresentable {
-    var material: NSVisualEffectView.Material = .hudWindow
-    var blendingMode: NSVisualEffectView.BlendingMode = .behindWindow
-
-    func makeNSView(context: Context) -> NSVisualEffectView {
-        let view = NSVisualEffectView()
-        view.material = material
-        view.blendingMode = blendingMode
-        view.state = .active          // always active, even when window is not key
-        view.isEmphasized = true
-        return view
-    }
-
-    func updateNSView(_ nsView: NSVisualEffectView, context: Context) {
-        nsView.material = material
-        nsView.blendingMode = blendingMode
-    }
-}
-
 struct TerminalTabView: View {
     @Binding var projectPath: String
     var projectId: String = ""
@@ -134,6 +113,10 @@ struct TerminalTabView: View {
             agentMonitor.stop()
         }
         .onChange(of: selectedTabId) { _, newId in
+            // Clear attention state when user selects a tab
+            if let tab = tabs.first(where: { $0.id == newId }) {
+                tab.needsAttention = false
+            }
             // Switch agent monitor to the newly selected tab's shell
             if let tab = tabs.first(where: { $0.id == newId }), tab.shellPid > 0 {
                 agentMonitor.start(shellPid: tab.shellPid)
@@ -162,6 +145,12 @@ struct TerminalTabView: View {
             guard let text = notification.userInfo?["text"] as? String else { return }
             NSPasteboard.general.clearContents()
             NSPasteboard.general.setString(text, forType: .string)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .claudeProcessDidExit)) { _ in
+            // Mark the current tab as needing attention when Claude exits
+            if let tab = tabs.first(where: { $0.id == selectedTabId }) {
+                tab.needsAttention = true
+            }
         }
     }
 
@@ -198,16 +187,17 @@ struct TerminalTabView: View {
     @ViewBuilder
     private func tabButton(for tab: TerminalTab) -> some View {
         let isSelected = tab.id == selectedTabId
+        let attention = tab.needsAttention
 
         HStack(spacing: WorkspaceTheme.Spacing.xxs) {
-            Image(systemName: "terminal")
+            Image(systemName: attention ? "exclamationmark.terminal" : "terminal")
                 .font(WorkspaceTheme.Font.tag)
-                .foregroundColor(isSelected ? .primary : .secondary.opacity(0.5))
+                .foregroundColor(attention ? .red : (isSelected ? .primary : .secondary.opacity(0.5)))
 
             Text(tab.title)
                 .font(isSelected ? WorkspaceTheme.Font.footnoteMedium : WorkspaceTheme.Font.footnote)
                 .lineLimit(1)
-                .foregroundColor(isSelected ? .primary : .secondary)
+                .foregroundColor(attention ? .red : (isSelected ? .primary : .secondary))
 
             if tabs.count > 1 {
                 Button(action: { closeTab(tab) }) {
@@ -227,6 +217,10 @@ struct TerminalTabView: View {
         }
         .padding(.horizontal, WorkspaceTheme.Spacing.sm)
         .padding(.vertical, WorkspaceTheme.Spacing.xxs)
+        .overlay(
+            RoundedRectangle(cornerRadius: WorkspaceTheme.Radius.small, style: .continuous)
+                .strokeBorder(Color.red.opacity(attention ? 0.6 : 0), lineWidth: 1)
+        )
         .contentShape(Rectangle())
         .onTapGesture {
             selectedTabId = tab.id

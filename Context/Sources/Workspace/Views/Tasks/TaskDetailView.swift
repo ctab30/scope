@@ -20,7 +20,7 @@ struct TaskDetailView: View {
     @State private var selectedLabels: Set<String> = []
     @State private var customLabel: String = ""
     @State private var selectedProjectId: String = "__global__"
-    @State private var enrichError: String?
+
     @State private var attachedImages: [String] = []
     @State private var attachedMarkdown: [String] = []
     @State private var expandedFiles: Set<String> = []
@@ -86,31 +86,9 @@ struct TaskDetailView: View {
 
                     // Description
                     VStack(alignment: .leading, spacing: WorkspaceTheme.Spacing.xxs) {
-                        HStack {
-                            Text("Description")
+                        Text("Description")
                                 .font(WorkspaceTheme.Font.footnoteSemibold)
                                 .foregroundColor(.secondary)
-                            Spacer()
-
-                            // AI Enrich button
-                            if claudeService.isGenerating {
-                                HStack(spacing: WorkspaceTheme.Spacing.xxs) {
-                                    ProgressView()
-                                        .scaleEffect(0.5)
-                                    Text("Enriching...")
-                                        .font(WorkspaceTheme.Font.caption)
-                                        .foregroundColor(.secondary)
-                                }
-                            } else {
-                                Button {
-                                    enrichWithAI()
-                                } label: {
-                                    Label("Enrich with AI", systemImage: "sparkles")
-                                }
-                                .buttonStyle(.bordered)
-                                .controlSize(.small)
-                            }
-                        }
 
                         TextEditor(text: $description)
                             .font(WorkspaceTheme.Font.mono)
@@ -126,15 +104,6 @@ struct TaskDetailView: View {
                                     .stroke(WorkspaceTheme.Colors.separator.opacity(WorkspaceTheme.Opacity.border), lineWidth: 0.5)
                             )
 
-                        if let error = enrichError {
-                            HStack(spacing: WorkspaceTheme.Spacing.xxs) {
-                                Image(systemName: "exclamationmark.triangle")
-                                    .font(WorkspaceTheme.Font.caption)
-                                Text(error)
-                                    .font(WorkspaceTheme.Font.caption)
-                            }
-                            .foregroundColor(.white)
-                        }
                     }
 
                     // Priority
@@ -511,16 +480,6 @@ struct TaskDetailView: View {
     }
 
 
-    private func enrichWithAI() {
-        enrichError = nil
-        Task {
-            if let result = await claudeService.enrichTask(title: title, currentDescription: description) {
-                description = result
-            } else {
-                enrichError = claudeService.lastError ?? "Failed to enrich"
-            }
-        }
-    }
 
     // MARK: - Notes
 

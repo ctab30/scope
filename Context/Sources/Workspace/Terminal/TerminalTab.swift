@@ -7,6 +7,7 @@ import Foundation
 class TerminalTab: Identifiable, ObservableObject {
     let id = UUID()
     @Published var title: String
+    @Published var needsAttention: Bool = false
     let initialDirectory: String
     let initialCommand: String?
     var shellPid: pid_t = 0
