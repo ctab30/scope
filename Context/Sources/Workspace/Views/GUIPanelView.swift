@@ -3,7 +3,7 @@ import GRDB
 
 // MARK: - MCP Connection Monitor
 
-struct MCPConnection: Identifiable {
+struct MCPConnection: Identifiable, Equatable {
     let id: Int // PID
     let cwd: String
     let projectId: String?
@@ -40,7 +40,9 @@ class MCPConnectionMonitor: ObservableObject {
 
     private func poll() {
         guard FileManager.default.fileExists(atPath: statusDir.path) else {
-            DispatchQueue.main.async { self.connections = [] }
+            if !connections.isEmpty {
+                DispatchQueue.main.async { self.connections = [] }
+            }
             return
         }
 
@@ -48,7 +50,9 @@ class MCPConnectionMonitor: ObservableObject {
         guard let files = try? FileManager.default.contentsOfDirectory(
             at: statusDir, includingPropertiesForKeys: nil
         ) else {
-            DispatchQueue.main.async { self.connections = [] }
+            if !connections.isEmpty {
+                DispatchQueue.main.async { self.connections = [] }
+            }
             return
         }
 
@@ -81,7 +85,12 @@ class MCPConnectionMonitor: ObservableObject {
             ))
         }
 
-        DispatchQueue.main.async { self.connections = active }
+        DispatchQueue.main.async {
+            // Only update if changed to avoid unnecessary SwiftUI re-renders
+            if self.connections != active {
+                self.connections = active
+            }
+        }
     }
 }
 

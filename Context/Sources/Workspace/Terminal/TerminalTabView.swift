@@ -254,6 +254,13 @@ private struct TabButton: View {
 
     var body: some View {
         HStack(spacing: WorkspaceTheme.Spacing.xxs) {
+            if tab.needsAttention {
+                Image(systemName: "bell.badge.fill")
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundColor(.red)
+                    .symbolEffect(.pulse, isActive: true)
+            }
+
             Image(systemName: tab.needsAttention ? "exclamationmark.terminal" : "terminal")
                 .font(WorkspaceTheme.Font.tag)
                 .foregroundColor(tab.needsAttention ? .red : (isSelected ? .primary : .secondary.opacity(0.5)))

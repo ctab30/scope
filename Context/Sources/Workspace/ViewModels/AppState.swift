@@ -133,38 +133,6 @@ class AppState: ObservableObject {
         try? notifyScript.write(to: notifyScriptPath, atomically: true, encoding: .utf8)
         try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: notifyScriptPath.path)
 
-        // -- 1b. Idle notification script (60s delay) --
-        // Fires when Claude finishes and waits for input. Delays 60s so it only
-        // notifies if the user walked away — not on every single response.
-        let idleNotifyScriptPath = hooksDir.appendingPathComponent("notify-idle-\(project.id).sh")
-        let idleNotifyScript = """
-        #!/bin/bash
-        # Collect ancestor PIDs
-        ANCESTORS=""
-        PID=$PPID
-        for i in $(seq 1 10); do
-            [ "$PID" -le 1 ] 2>/dev/null && break
-            ANCESTORS="$ANCESTORS$PID,"
-            PID=$(ps -o ppid= -p $PID 2>/dev/null | tr -d ' ')
-        done
-        STAMP_FILE='/tmp/workspace-idle-\(project.id)-'$PPID
-        date +%s > "$STAMP_FILE"
-        MY_STAMP=$(cat "$STAMP_FILE")
-        (
-            sleep 60
-            [ -f "$STAMP_FILE" ] || exit 0
-            CURRENT=$(cat "$STAMP_FILE" 2>/dev/null)
-            [ "$CURRENT" = "$MY_STAMP" ] || exit 0
-            rm -f "$STAMP_FILE"
-            mkdir -p '\(notifyDir)'
-            cat > '\(notifyDir)/idle-$$-$(date +%s).json' <<NOTIFY_EOF
-        {"title":"Claude Code","subtitle":"\(projectName)","body":"Waiting for input","projectPath":"\(escapedProjectPath)","ancestors":"$ANCESTORS"}
-        NOTIFY_EOF
-        ) &
-        """
-        try? idleNotifyScript.write(to: idleNotifyScriptPath, atomically: true, encoding: .utf8)
-        try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: idleNotifyScriptPath.path)
-
         // -- 2. File tracking script (PostToolUse: Edit/Write/NotebookEdit) --
         let fileTrackScriptPath = hooksDir.appendingPathComponent("track-files-\(project.id).sh")
         let fileTrackScript = """
@@ -202,20 +170,12 @@ class AppState: ObservableObject {
             settings = existing
         }
 
-        // Notification hooks:
-        // - permission_prompt → instant (always urgent)
-        // - idle_prompt → 60s delay (only if user walked away)
+        // Notification hook — fires only on permission_prompt (needs tool approval)
         let notifyHook: [[String: Any]] = [
             [
                 "matcher": "permission_prompt",
                 "hooks": [
                     ["type": "command", "command": notifyScriptPath.path, "timeout": 5]
-                ]
-            ],
-            [
-                "matcher": "idle_prompt",
-                "hooks": [
-                    ["type": "command", "command": idleNotifyScriptPath.path, "timeout": 5]
                 ]
             ]
         ]
