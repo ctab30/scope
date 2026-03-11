@@ -764,22 +764,18 @@ class MCPServer {
                     .fetchAll(db)
             }), !openTasks.isEmpty {
                 let inProgress = openTasks.filter { $0.status == "in_progress" }
-                let attention = openTasks.filter { $0.status == "needs_attention" }
 
-                if !inProgress.isEmpty || !attention.isEmpty {
+                if !inProgress.isEmpty {
                     parts.append("")
                     parts.append("ACTIVE WORK — resume these before starting new tasks:")
                     for t in inProgress {
                         parts.append("  [in_progress] #\(t.id ?? 0): \(t.title)")
                     }
-                    for t in attention {
-                        parts.append("  [needs_attention] #\(t.id ?? 0): \(t.title)")
-                    }
                     parts.append("Use get_task to load full context for these tasks.")
                 }
 
                 let todoCount = openTasks.filter { $0.status == "todo" }.count
-                if todoCount > 0 && inProgress.isEmpty && attention.isEmpty {
+                if todoCount > 0 && inProgress.isEmpty {
                     parts.append("")
                     parts.append("You have \(todoCount) queued task(s). Use get_next_task to pick one up.")
                 }
@@ -1005,7 +1001,6 @@ class MCPServer {
         var lines: [String] = ["# Active Tasks (\(openTasks.count))"]
         let grouped: [(String, [TaskItem])] = [
             ("In Progress", openTasks.filter { $0.status == "in_progress" }),
-            ("Needs Attention", openTasks.filter { $0.status == "needs_attention" }),
             ("Todo", openTasks.filter { $0.status == "todo" }),
         ]
 
@@ -1087,7 +1082,7 @@ class MCPServer {
                     "type": "object",
                     "properties": [
                         "project_id": ["type": "string", "description": "Project ID (auto-detected if omitted)"],
-                        "status": ["type": "string", "description": "Filter by status: todo, in_progress, needs_attention, done. Omit for all.", "enum": ["todo", "in_progress", "needs_attention", "done"]],
+                        "status": ["type": "string", "description": "Filter by status: todo, in_progress, done. Omit for all.", "enum": ["todo", "in_progress", "done"]],
                     ]
                 ]
             ],
@@ -1122,12 +1117,12 @@ class MCPServer {
             ],
             [
                 "name": "update_task",
-                "description": "Update a task's fields (status, priority, title, description, labels). Use to start work (status='in_progress') or flag blockers (status='needs_attention'). Do NOT use status='done' — use complete_task instead for proper completion tracking with summary.",
+                "description": "Update a task's fields (status, priority, title, description, labels). Use to start work (status='in_progress'). Do NOT use status='done' — use complete_task instead for proper completion tracking with summary.",
                 "inputSchema": [
                     "type": "object",
                     "properties": [
                         "task_id": ["type": "integer", "description": "Task ID"],
-                        "status": ["type": "string", "description": "New status", "enum": ["todo", "in_progress", "needs_attention", "done"]],
+                        "status": ["type": "string", "description": "New status", "enum": ["todo", "in_progress", "done"]],
                         "priority": ["type": "integer", "description": "New priority (0-4)"],
                         "title": ["type": "string", "description": "New title"],
                         "description": ["type": "string", "description": "New description"],
@@ -2004,19 +1999,12 @@ class MCPServer {
         if !openTasks.isEmpty {
             let inProgress = openTasks.filter { $0.status == "in_progress" }
             let todo = openTasks.filter { $0.status == "todo" }
-            let attention = openTasks.filter { $0.status == "needs_attention" }
 
             sections.append("## Open Tasks (\(openTasks.count))")
 
             if !inProgress.isEmpty {
                 sections.append("### In Progress")
                 for t in inProgress {
-                    sections.append("  #\(t.id ?? 0) \(t.title)")
-                }
-            }
-            if !attention.isEmpty {
-                sections.append("### Needs Attention")
-                for t in attention {
                     sections.append("  #\(t.id ?? 0) \(t.title)")
                 }
             }
@@ -2161,13 +2149,11 @@ class MCPServer {
         // Add smart summary
         let todoCount = tasks.filter { $0.status == "todo" }.count
         let inProgressCount = tasks.filter { $0.status == "in_progress" }.count
-        let attentionCount = tasks.filter { $0.status == "needs_attention" }.count
         let doneCount = tasks.filter { $0.status == "done" }.count
 
         var summaryParts: [String] = []
         if todoCount > 0 { summaryParts.append("\(todoCount) todo") }
         if inProgressCount > 0 { summaryParts.append("\(inProgressCount) in progress") }
-        if attentionCount > 0 { summaryParts.append("\(attentionCount) needs attention") }
         if doneCount > 0 { summaryParts.append("\(doneCount) done") }
 
         if statusFilter == nil && !summaryParts.isEmpty {
@@ -2302,11 +2288,6 @@ class MCPServer {
             try task.insert(db)
         }
 
-        // If created as in_progress, track it for hook-based needs_attention
-        if initialStatus == "in_progress", let taskId = task.id {
-            trackActiveTask(taskId: taskId, status: "in_progress")
-        }
-
         var result = "Created task #\(task.id ?? 0): \(title)"
         if initialStatus == "in_progress" {
             result += " [in_progress]"
@@ -2386,32 +2367,7 @@ class MCPServer {
             try task.update(db)
         }
 
-        // Track active task per MCP session for hook-based needs_attention
-        trackActiveTask(taskId: Int64(taskId), status: task.status)
-
         return "Updated task #\(taskId): \(changes.joined(separator: ", "))"
-    }
-
-    /// Writes the active task ID for this project so the Claude Code hook knows which task to move.
-    private func trackActiveTask(taskId: Int64, status: String?) {
-        guard let projectId = detectedProjectId else { return }
-        let dir = FileManager.default.urls(
-            for: .applicationSupportDirectory,
-            in: .userDomainMask
-        ).first!.appendingPathComponent("Workspace/active-tasks", isDirectory: true)
-        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        let file = dir.appendingPathComponent(projectId)
-
-        if status == "in_progress" {
-            // Write task ID + dangerous mode flag so hook scripts can skip in dangerous mode
-            var content = "\(taskId)"
-            if connectionStatus.isDangerousMode {
-                content += "\ndangerous"
-            }
-            try? content.write(to: file, atomically: true, encoding: .utf8)
-        } else {
-            try? FileManager.default.removeItem(at: file)
-        }
     }
 
     func addTaskNote(_ args: [String: Any]) throws -> String {
@@ -2748,9 +2704,6 @@ class MCPServer {
                 try note.insert(db)
             }
         }
-
-        // Clear active task tracking since task is done
-        trackActiveTask(taskId: Int64(taskId), status: "done")
 
         // Check task richness — nudge if sparse
         let noteCount = try db.read { db in

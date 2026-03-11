@@ -8,7 +8,7 @@ struct TaskItem: Codable, Identifiable, FetchableRecord, MutablePersistableRecor
     var projectId: String
     var title: String
     var description: String?
-    var status: String // "todo", "in_progress", "needs_attention", "done"
+    var status: String // "todo", "in_progress", "done"
     var priority: Int
     var sourceSession: String?
     var source: String // "claude", "manual", "ai-extracted"
@@ -152,7 +152,7 @@ struct TaskItem: Codable, Identifiable, FetchableRecord, MutablePersistableRecor
 
     // MARK: - Status Validation
 
-    static let validStatuses = ["todo", "in_progress", "needs_attention", "done"]
+    static let validStatuses = ["todo", "in_progress", "done"]
 
     var isValidStatus: Bool {
         Self.validStatuses.contains(status)

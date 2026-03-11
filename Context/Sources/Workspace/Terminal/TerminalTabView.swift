@@ -115,6 +115,12 @@ struct TerminalTabView: View {
         .onDisappear {
             agentMonitor.stop()
         }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            // Clear attention on the selected tab when user returns to the app
+            if let tab = tabs.first(where: { $0.id == selectedTabId }) {
+                tab.needsAttention = false
+            }
+        }
         .onChange(of: selectedTabId) { _, newId in
             // Clear attention state when user selects a tab
             if let tab = tabs.first(where: { $0.id == newId }) {
@@ -155,6 +161,13 @@ struct TerminalTabView: View {
                 tab.needsAttention = true
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .terminalInput)) { notification in
+            // Clear attention when user types in a terminal
+            guard let inputView = notification.object as? NSView else { return }
+            if let tab = tabs.first(where: { $0.terminalView === inputView }) {
+                tab.needsAttention = false
+            }
+        }
         .onReceive(NotificationCenter.default.publisher(for: .terminalBell)) { notification in
             // Mark the tab that rang the bell as needing attention
             guard let bellView = notification.object as? NSView else { return }
@@ -163,6 +176,30 @@ struct TerminalTabView: View {
                 if tab.id != selectedTabId || !NSApp.isActive {
                     tab.needsAttention = true
                 }
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .sessionNeedsAttention)) { notification in
+            // Hook-based notification: match tab by checking if its shell PID
+            // is in the hook's ancestor chain. Falls back to all project tabs.
+            let notifPath = notification.userInfo?["projectPath"] as? String
+            let ancestorsStr = notification.userInfo?["ancestors"] as? String
+            let shouldHandle = notifPath == nil || notifPath == projectPath
+            guard shouldHandle else { return }
+
+            // Parse ancestor PIDs from comma-separated string
+            if let ancestorsStr {
+                let ancestorPids = Set(ancestorsStr.split(separator: ",").compactMap { Int32($0) })
+                if !ancestorPids.isEmpty {
+                    if let tab = tabs.first(where: { ancestorPids.contains($0.shellPid) }) {
+                        tab.needsAttention = true
+                        return
+                    }
+                }
+            }
+
+            // Fallback: mark all tabs for this project
+            for tab in tabs {
+                tab.needsAttention = true
             }
         }
     }
@@ -197,23 +234,37 @@ struct TerminalTabView: View {
 
     // MARK: - Tab button
 
-    @ViewBuilder
     private func tabButton(for tab: TerminalTab) -> some View {
-        let isSelected = tab.id == selectedTabId
-        let attention = tab.needsAttention
+        TabButton(tab: tab, isSelected: tab.id == selectedTabId, showClose: tabs.count > 1) {
+            tab.needsAttention = false
+            selectedTabId = tab.id
+        } onClose: {
+            closeTab(tab)
+        }
+    }
+}
 
+/// Extracted so @ObservedObject subscribes to TerminalTab's @Published properties (needsAttention).
+private struct TabButton: View {
+    @ObservedObject var tab: TerminalTab
+    let isSelected: Bool
+    let showClose: Bool
+    let onSelect: () -> Void
+    let onClose: () -> Void
+
+    var body: some View {
         HStack(spacing: WorkspaceTheme.Spacing.xxs) {
-            Image(systemName: attention ? "exclamationmark.terminal" : "terminal")
+            Image(systemName: tab.needsAttention ? "exclamationmark.terminal" : "terminal")
                 .font(WorkspaceTheme.Font.tag)
-                .foregroundColor(attention ? .red : (isSelected ? .primary : .secondary.opacity(0.5)))
+                .foregroundColor(tab.needsAttention ? .red : (isSelected ? .primary : .secondary.opacity(0.5)))
 
             Text(tab.title)
                 .font(isSelected ? WorkspaceTheme.Font.footnoteMedium : WorkspaceTheme.Font.footnote)
                 .lineLimit(1)
-                .foregroundColor(attention ? .red : (isSelected ? .primary : .secondary))
+                .foregroundColor(tab.needsAttention ? .red : (isSelected ? .primary : .secondary))
 
-            if tabs.count > 1 {
-                Button(action: { closeTab(tab) }) {
+            if showClose {
+                Button(action: onClose) {
                     Image(systemName: "xmark")
                         .font(.system(size: 7, weight: .bold))
                         .foregroundStyle(.tertiary)
@@ -232,11 +283,11 @@ struct TerminalTabView: View {
         .padding(.vertical, WorkspaceTheme.Spacing.xxs)
         .overlay(
             RoundedRectangle(cornerRadius: WorkspaceTheme.Radius.small, style: .continuous)
-                .strokeBorder(Color.red.opacity(attention ? 0.6 : 0), lineWidth: 1)
+                .strokeBorder(Color.red.opacity(tab.needsAttention ? 0.6 : 0), lineWidth: 1)
         )
         .contentShape(Rectangle())
         .onTapGesture {
-            selectedTabId = tab.id
+            onSelect()
         }
     }
 }

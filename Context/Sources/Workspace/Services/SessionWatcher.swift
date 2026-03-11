@@ -8,10 +8,12 @@ extension Notification.Name {
     static let tasksDidChange = Notification.Name("tasksDidChange")
     /// Posted when a Claude Code process exits (transitions from running to not-running).
     static let claudeProcessDidExit = Notification.Name("claudeProcessDidExit")
-    /// Posted when tasks move to needs_attention (carries optional "projectName" in userInfo).
-    static let tasksNeedAttention = Notification.Name("tasksNeedAttention")
     /// Posted when a terminal rings the bell (BEL character). The object is the terminal view.
     static let terminalBell = Notification.Name("terminalBell")
+    /// Posted when a Claude session needs attention (hook notification received).
+    static let sessionNeedsAttention = Notification.Name("sessionNeedsAttention")
+    /// Posted when the user types in a terminal (clears attention indicator).
+    static let terminalInput = Notification.Name("terminalInput")
 }
 
 @MainActor

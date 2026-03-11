@@ -111,6 +111,17 @@ final class FocusableTerminalView: LocalProcessTerminalView {
         NotificationCenter.default.post(name: .terminalBell, object: self)
     }
 
+    // MARK: - Input (clears attention on keypress)
+
+    /// Monitor key events to clear attention indicators when user types.
+    func installInputMonitor() {
+        NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard let self, self.window?.firstResponder === self else { return event }
+            NotificationCenter.default.post(name: .terminalInput, object: self)
+            return event
+        }
+    }
+
     // MARK: - Cmd+V Image Paste
 
     override func paste(_ sender: Any) {
@@ -293,6 +304,7 @@ struct TerminalWrapper: NSViewRepresentable {
         context.coordinator.startShell(in: initialDirectory)
         context.coordinator.installClickFocusMonitor(for: terminal)
         TerminalTracker.shared.register(terminal)
+        terminal.installInputMonitor()
         onViewCreated?(terminal)
 
         // Wait for the terminal frame to stabilize (NSSplitView divider

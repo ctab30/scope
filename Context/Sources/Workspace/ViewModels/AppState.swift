@@ -77,15 +77,14 @@ class AppState: ObservableObject {
             print("Failed to update project: \(error)")
         }
 
-        // Install Claude Code hooks for needs_attention
+        // Install Claude Code hooks for file tracking
         installClaudeHooks(for: project)
 
         // Generate project profile asynchronously
         generateProjectProfile(for: project)
     }
 
-    /// Writes hooks to the project's `.claude/settings.local.json` so every Claude session
-    /// in that directory automatically moves in_progress tasks to needs_attention on Stop/Notification.
+    /// Writes hooks to the project's `.claude/settings.local.json` for file tracking and notifications.
     private func installClaudeHooks(for project: Project) {
         let projectURL = URL(fileURLWithPath: project.path)
         let claudeDir = projectURL.appendingPathComponent(".claude", isDirectory: true)
@@ -98,7 +97,7 @@ class AppState: ObservableObject {
         let injector = ContextInjector()
         try? injector.updateClaudeMD(for: project)
 
-        // Write the project-level hook script to ~/.workspace/hooks/
+        // Write hook scripts to ~/.workspace/hooks/
         let homeDir = FileManager.default.homeDirectoryForCurrentUser
         let hooksDir = homeDir.appendingPathComponent(".workspace/hooks", isDirectory: true)
         try? FileManager.default.createDirectory(at: hooksDir, withIntermediateDirectories: true)
@@ -108,95 +107,65 @@ class AppState: ObservableObject {
             in: .userDomainMask
         ).first!.appendingPathComponent("Workspace").path
         let dbPath = appSupportPath + "/workspace.db"
-        let activeTasksDir = appSupportPath + "/active-tasks"
-
-        // Find WorkspaceMCP binary path (sibling to main app binary)
-        let mcpBinaryPath = Bundle.main.bundlePath + "/Contents/MacOS/WorkspaceMCP"
+        let notifyDir = appSupportPath + "/notifications"
 
         let projectName = project.name.replacingOccurrences(of: "'", with: "'\\''")
-        let lockDir = appSupportPath + "/hook-locks"
+        let escapedProjectPath = project.path.replacingOccurrences(of: "'", with: "'\\''")
 
-        // -- 1. Needs-attention script (Stop/Notification) --
-        // Uses a lock file to prevent multiple timers from piling up.
-        // Checks a "last-active" timestamp so stale timers don't override resumed sessions.
-        let scriptPath = hooksDir.appendingPathComponent("needs-attention-\(project.id).sh")
-        let script = """
+        // -- 1a. Permission notification script (instant) --
+        // Fires immediately when Claude needs tool approval.
+        let notifyScriptPath = hooksDir.appendingPathComponent("notify-\(project.id).sh")
+        let notifyScript = """
         #!/bin/bash
-        DB='\(dbPath)'
-        TASK_FILE='\(activeTasksDir)/\(project.id)'
-        ACTIVE_FILE='\(activeTasksDir)/\(project.id).active'
-        LOCK_FILE='\(lockDir)/\(project.id).lock'
+        # Collect all ancestor PIDs so the app can match to the terminal tab's shell
+        ANCESTORS=""
+        PID=$PPID
+        for i in $(seq 1 10); do
+            [ "$PID" -le 1 ] 2>/dev/null && break
+            ANCESTORS="$ANCESTORS$PID,"
+            PID=$(ps -o ppid= -p $PID 2>/dev/null | tr -d ' ')
+        done
+        mkdir -p '\(notifyDir)'
+        cat > '\(notifyDir)/hook-$$-$(date +%s).json' <<NOTIFY_EOF
+        {"title":"Claude Code","subtitle":"\(projectName)","body":"Needs approval","projectPath":"\(escapedProjectPath)","ancestors":"$ANCESTORS"}
+        NOTIFY_EOF
+        """
+        try? notifyScript.write(to: notifyScriptPath, atomically: true, encoding: .utf8)
+        try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: notifyScriptPath.path)
 
-        [ ! -f "$TASK_FILE" ] && exit 0
-        CONTENT=$(cat "$TASK_FILE" 2>/dev/null)
-        TASK_ID=$(echo "$CONTENT" | head -1)
-        [ -z "$TASK_ID" ] && exit 0
-
-        # Skip if running in dangerous mode
-        echo "$CONTENT" | grep -q "^dangerous$" && exit 0
-
-        # Write current timestamp so the timer knows when this event fired
-        mkdir -p '\(lockDir)'
-        date +%s > "$ACTIVE_FILE"
-
-        # If a timer is already running, just update the timestamp and exit.
-        # The running timer will pick up the new timestamp.
-        [ -f "$LOCK_FILE" ] && exit 0
-
-        # Background the delay so the hook returns immediately
+        // -- 1b. Idle notification script (60s delay) --
+        // Fires when Claude finishes and waits for input. Delays 60s so it only
+        // notifies if the user walked away — not on every single response.
+        let idleNotifyScriptPath = hooksDir.appendingPathComponent("notify-idle-\(project.id).sh")
+        let idleNotifyScript = """
+        #!/bin/bash
+        # Collect ancestor PIDs
+        ANCESTORS=""
+        PID=$PPID
+        for i in $(seq 1 10); do
+            [ "$PID" -le 1 ] 2>/dev/null && break
+            ANCESTORS="$ANCESTORS$PID,"
+            PID=$(ps -o ppid= -p $PID 2>/dev/null | tr -d ' ')
+        done
+        STAMP_FILE='/tmp/workspace-idle-\(project.id)-'$PPID
+        date +%s > "$STAMP_FILE"
+        MY_STAMP=$(cat "$STAMP_FILE")
         (
-            touch "$LOCK_FILE"
-            trap 'rm -f "$LOCK_FILE"' EXIT
-
-            sleep 30
-
-            # Re-check dangerous mode (may have been set after we started)
-            if [ -f "$TASK_FILE" ]; then
-                cat "$TASK_FILE" 2>/dev/null | grep -q "^dangerous$" && exit 0
-            fi
-
-            # Check if user came back during our sleep (last-active updated after our event)
-            if [ -f "$ACTIVE_FILE" ]; then
-                LAST_ACTIVE=$(cat "$ACTIVE_FILE" 2>/dev/null)
-                NOW=$(date +%s)
-                ELAPSED=$((NOW - ${LAST_ACTIVE:-0}))
-                # If activity happened less than 25s ago, user came back — abort
-                [ "$ELAPSED" -lt 25 ] && exit 0
-            fi
-
-            # Final check: is the task still in_progress?
-            TITLE=$(/usr/bin/sqlite3 "$DB" "SELECT title FROM taskItems WHERE id = $TASK_ID AND status = 'in_progress' LIMIT 1;" 2>/dev/null)
-            [ -z "$TITLE" ] && exit 0
-
-            /usr/bin/sqlite3 "$DB" "UPDATE taskItems SET status = 'needs_attention' WHERE id = $TASK_ID AND status = 'in_progress';"
-            '\(mcpBinaryPath)' notify --title "Needs Attention" --subtitle '\(projectName)' --body "$TITLE"
+            sleep 60
+            [ -f "$STAMP_FILE" ] || exit 0
+            CURRENT=$(cat "$STAMP_FILE" 2>/dev/null)
+            [ "$CURRENT" = "$MY_STAMP" ] || exit 0
+            rm -f "$STAMP_FILE"
+            mkdir -p '\(notifyDir)'
+            cat > '\(notifyDir)/idle-$$-$(date +%s).json' <<NOTIFY_EOF
+        {"title":"Claude Code","subtitle":"\(projectName)","body":"Waiting for input","projectPath":"\(escapedProjectPath)","ancestors":"$ANCESTORS"}
+        NOTIFY_EOF
         ) &
         """
-        try? script.write(to: scriptPath, atomically: true, encoding: .utf8)
-        try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: scriptPath.path)
+        try? idleNotifyScript.write(to: idleNotifyScriptPath, atomically: true, encoding: .utf8)
+        try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: idleNotifyScriptPath.path)
 
-        // -- 2. Resume script (UserPromptSubmit only) --
-        // Writes last-active timestamp to cancel pending needs-attention timers.
-        let resumeScriptPath = hooksDir.appendingPathComponent("resume-\(project.id).sh")
-        let resumeScript = """
-        #!/bin/bash
-        DB='\(dbPath)'
-        TASK_FILE='\(activeTasksDir)/\(project.id)'
-        ACTIVE_FILE='\(activeTasksDir)/\(project.id).active'
-
-        [ ! -f "$TASK_FILE" ] && exit 0
-        TASK_ID=$(head -1 "$TASK_FILE" 2>/dev/null)
-        [ -z "$TASK_ID" ] && exit 0
-
-        # Update last-active timestamp — cancels any pending needs-attention timer
-        date +%s > "$ACTIVE_FILE" 2>/dev/null
-
-        /usr/bin/sqlite3 "$DB" "UPDATE taskItems SET status = 'in_progress' WHERE id = $TASK_ID AND status = 'needs_attention';"
-        """
-        try? resumeScript.write(to: resumeScriptPath, atomically: true, encoding: .utf8)
-        try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: resumeScriptPath.path)
-
-        // -- 3. File tracking script (PostToolUse: Edit/Write/NotebookEdit) --
+        // -- 2. File tracking script (PostToolUse: Edit/Write/NotebookEdit) --
         let fileTrackScriptPath = hooksDir.appendingPathComponent("track-files-\(project.id).sh")
         let fileTrackScript = """
         #!/bin/bash
@@ -212,10 +181,10 @@ class AppState: ObservableObject {
         [ -z "$FILE_PATH" ] && exit 0
 
         DB='\(dbPath)'
-        TASK_FILE='\(activeTasksDir)/\(project.id)'
+        PROJECT_ID='\(project.id)'
 
-        [ ! -f "$TASK_FILE" ] && exit 0
-        TASK_ID=$(head -1 "$TASK_FILE" 2>/dev/null)
+        # Find the most recent in_progress task for this project
+        TASK_ID=$(/usr/bin/sqlite3 "$DB" "SELECT id FROM taskItems WHERE projectId = '$PROJECT_ID' AND status = 'in_progress' ORDER BY createdAt DESC LIMIT 1;" 2>/dev/null)
         [ -z "$TASK_ID" ] && exit 0
 
         CHANGE_TYPE="edit"
@@ -233,21 +202,20 @@ class AppState: ObservableObject {
             settings = existing
         }
 
-        // Notification/Stop → start needs_attention timer (with lock + timestamp)
-        let needsAttentionHook: [[String: Any]] = [
+        // Notification hooks:
+        // - permission_prompt → instant (always urgent)
+        // - idle_prompt → 60s delay (only if user walked away)
+        let notifyHook: [[String: Any]] = [
             [
-                "matcher": "",
+                "matcher": "permission_prompt",
                 "hooks": [
-                    ["type": "command", "command": scriptPath.path, "timeout": 10]
+                    ["type": "command", "command": notifyScriptPath.path, "timeout": 5]
                 ]
-            ]
-        ]
-        // UserPromptSubmit → resume task + cancel pending timer
-        let resumeHook: [[String: Any]] = [
+            ],
             [
-                "matcher": "",
+                "matcher": "idle_prompt",
                 "hooks": [
-                    ["type": "command", "command": resumeScriptPath.path, "timeout": 10]
+                    ["type": "command", "command": idleNotifyScriptPath.path, "timeout": 5]
                 ]
             ]
         ]
@@ -262,9 +230,7 @@ class AppState: ObservableObject {
         ]
 
         settings["hooks"] = [
-            "Notification": needsAttentionHook,
-            "Stop": needsAttentionHook,
-            "UserPromptSubmit": resumeHook,
+            "Notification": notifyHook,
             "PostToolUse": fileTrackHook
         ]
 

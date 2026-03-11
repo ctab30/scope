@@ -58,43 +58,7 @@ class MCPConnectionMonitor: ObservableObject {
 
             // Check if process is still running
             if kill(Int32(pid), 0) != 0 {
-                // Process is dead — read projectId before cleanup
-                if let data = try? Data(contentsOf: file),
-                   let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-                   let projectId = json["projectId"] as? String {
-                    let wasDangerous = json["dangerousMode"] as? Bool == true
-
-                    // Check if any OTHER active connections exist for this project
-                    let otherFiles = files.filter { f in
-                        guard f != file, f.pathExtension == "json" else { return false }
-                        guard let pStr = f.deletingPathExtension().lastPathComponent.components(separatedBy: ".").first,
-                              let otherPid = Int(pStr),
-                              kill(Int32(otherPid), 0) == 0 else { return false }
-                        guard let d = try? Data(contentsOf: f),
-                              let j = try? JSONSerialization.jsonObject(with: d) as? [String: Any],
-                              let pId = j["projectId"] as? String else { return false }
-                        return pId == projectId
-                    }
-                    if otherFiles.isEmpty && !wasDangerous {
-                        // No other sessions — move in_progress tasks to needs_attention
-                        // (skip for dangerous mode — Claude runs autonomously)
-                        let moved = try? DatabaseService.shared.dbQueue.write { db -> Int in
-                            try db.execute(
-                                sql: "UPDATE taskItems SET status = 'needs_attention' WHERE projectId = ? AND status = 'in_progress'",
-                                arguments: [projectId]
-                            )
-                            return db.changesCount
-                        }
-                        if let moved, moved > 0 {
-                            let projName = json["projectName"] as? String
-                            DispatchQueue.main.async {
-                                NotificationCenter.default.post(name: .tasksDidChange, object: nil)
-                                NotificationCenter.default.post(name: .tasksNeedAttention, object: nil, userInfo: ["projectName": projName as Any])
-                            }
-                        }
-                    }
-                }
-                // Clean up stale file
+                // Clean up stale connection file
                 try? FileManager.default.removeItem(at: file)
                 continue
             }
@@ -105,31 +69,6 @@ class MCPConnectionMonitor: ObservableObject {
             var lastActivity: Date? = nil
             if let lastActivityStr = json["lastActivityAt"] as? String {
                 lastActivity = ISO8601DateFormatter().date(from: lastActivityStr)
-            }
-
-            let isDangerous = json["dangerousMode"] as? Bool == true
-
-            // Detect idle sessions: alive but no MCP activity for 60+ seconds
-            // Skip for dangerous mode — Claude runs autonomously without MCP calls
-            if let projectId = json["projectId"] as? String,
-               let activity = lastActivity,
-               Date().timeIntervalSince(activity) > 60,
-               !isDangerous {
-                // Move in_progress tasks to needs_attention for this idle session
-                let moved = try? DatabaseService.shared.dbQueue.write { db -> Int in
-                    try db.execute(
-                        sql: "UPDATE taskItems SET status = 'needs_attention' WHERE projectId = ? AND status = 'in_progress'",
-                        arguments: [projectId]
-                    )
-                    return db.changesCount
-                }
-                if let moved, moved > 0 {
-                    let projName = json["projectName"] as? String
-                    DispatchQueue.main.async {
-                        NotificationCenter.default.post(name: .tasksDidChange, object: nil)
-                        NotificationCenter.default.post(name: .tasksNeedAttention, object: nil, userInfo: ["projectName": projName as Any])
-                    }
-                }
             }
 
             active.append(MCPConnection(

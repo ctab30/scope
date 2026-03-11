@@ -24,20 +24,6 @@ class SystemNotificationService: NSObject, ObservableObject {
             .store(in: &cancellables)
     }
 
-    func observeNeedsAttentionNotifications() {
-        NotificationCenter.default.publisher(for: .tasksNeedAttention)
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] notification in
-                guard let self else { return }
-                let projectName = notification.userInfo?["projectName"] as? String
-                let body = projectName != nil
-                    ? "\(projectName!) has tasks waiting for your input"
-                    : "Tasks are waiting for your input"
-                self.sendNotification(title: "Needs Attention", body: body)
-            }
-            .store(in: &cancellables)
-    }
-
     /// Poll for notification request files written by WorkspaceMCP hook binary.
     func observeHookNotifications() {
         let notifyDir = FileManager.default.urls(
@@ -58,7 +44,18 @@ class SystemNotificationService: NSObject, ObservableObject {
                         let title = info["title"] ?? "Needs Attention"
                         let body = info["body"] ?? ""
                         let subtitle = info["subtitle"]
+                        let projectPath = info["projectPath"]
+                        let ancestors = info["ancestors"]
                         self.sendNotification(title: title, body: body, subtitle: subtitle)
+                        // Post attention notification so terminal tabs can show red indicator
+                        var userInfo: [String: String] = [:]
+                        if let projectPath { userInfo["projectPath"] = projectPath }
+                        if let ancestors { userInfo["ancestors"] = ancestors }
+                        NotificationCenter.default.post(
+                            name: .sessionNeedsAttention,
+                            object: nil,
+                            userInfo: userInfo.isEmpty ? nil : userInfo
+                        )
                     }
                     try? FileManager.default.removeItem(at: file)
                 }

@@ -113,10 +113,6 @@ struct WorkspaceApp: App {
         // so Claude Code needs the binary at a standalone path.
         Self.deployMCPBinary()
 
-        // Ensure active-tasks directory exists for hook scripts
-        let activeTasksDir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)
-            .first!.appendingPathComponent("Workspace/active-tasks", isDirectory: true)
-        try? FileManager.default.createDirectory(at: activeTasksDir, withIntermediateDirectories: true)
     }
 
     /// Copies the WorkspaceMCP binary from the app bundle to Application Support
@@ -250,7 +246,6 @@ struct WorkspaceApp: App {
                     appState.loadProjects()
                     contextEngine.startPollingForRequests()
                     notificationService.observeClaudeExitNotifications()
-                    notificationService.observeNeedsAttentionNotifications()
                     notificationService.observeHookNotifications()
                     // Show onboarding wizard on first launch
                     if !UserDefaults.standard.bool(forKey: "hasCompletedOnboarding") {
@@ -360,12 +355,6 @@ struct WorkspaceApp: App {
     private func handleDeepLink(_ url: URL) {
         guard url.scheme == "workspace" else { return }
 
-        // workspace://needs-attention?project=<id>&titles=<titles>
-        if url.host == "needs-attention" {
-            handleNeedsAttentionLink(url)
-            return
-        }
-
         // workspace://install-mcp?client=claude
         guard url.host == "install-mcp" else { return }
 
@@ -392,30 +381,5 @@ struct WorkspaceApp: App {
             deepLinkResult = .failure(error.localizedDescription)
         }
         showDeepLinkSheet = true
-    }
-
-    /// Handle workspace://needs-attention?project=<id>&titles=<titles>
-    /// Sends a native macOS notification with Workspace's app icon.
-    private func handleNeedsAttentionLink(_ url: URL) {
-        guard let components = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return }
-        let titles = components.queryItems?.first(where: { $0.name == "titles" })?.value ?? "Tasks need your attention"
-        let projectId = components.queryItems?.first(where: { $0.name == "project" })?.value
-
-        print("handleNeedsAttentionLink: titles=\(titles) project=\(projectId ?? "nil")")
-
-        let escapedTitles = titles.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"")
-        let script = "display notification \"\(escapedTitles)\" with title \"Needs Attention\""
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
-        process.arguments = ["-e", script]
-        process.standardOutput = FileHandle.nullDevice
-        process.standardError = FileHandle.nullDevice
-        try? process.run()
-
-        // Also post internal notification to refresh views
-        NotificationCenter.default.post(name: .tasksDidChange, object: nil)
-        if let projectId {
-            NotificationCenter.default.post(name: .tasksNeedAttention, object: nil, userInfo: ["projectName": projectId])
-        }
     }
 }
