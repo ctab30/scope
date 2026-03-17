@@ -105,13 +105,40 @@ struct GUIPanelView: View {
     var body: some View {
         VStack(spacing: 0) {
             if appState.isHomeView {
-                if appState.selectedTab == .browser {
-                    BrowserView(viewModel: browserViewModel)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else {
-                    // Home content
-                    HomeView()
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                // Home: KanbanBoard on top, browser or active tasks on bottom
+                SeamlessVSplitView2 {
+                    KanbanBoard(globalMode: true)
+                } bottom: {
+                    if appState.showHomeBrowser {
+                        VStack(spacing: 0) {
+                            // Divider acts as visible split boundary
+                            Divider()
+
+                            // Header with close button
+                            HStack {
+                                Text("Browser")
+                                    .font(WorkspaceTheme.Font.footnoteSemibold)
+                                Spacer()
+                                Button {
+                                    appState.showHomeBrowser = false
+                                } label: {
+                                    Image(systemName: "xmark.circle.fill")
+                                        .font(.system(size: 14))
+                                        .foregroundStyle(.secondary)
+                                }
+                                .buttonStyle(.plain)
+                            }
+                            .padding(.horizontal, WorkspaceTheme.Spacing.md)
+                            .padding(.vertical, WorkspaceTheme.Spacing.sm)
+
+                            Divider()
+
+                            BrowserView(viewModel: browserViewModel)
+                                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        }
+                    } else {
+                        ProjectTaskSummary()
+                    }
                 }
             } else {
                 // Project header (simplified — no dropdown picker)
@@ -160,7 +187,7 @@ struct GUIPanelView: View {
         }
         .onAppear {
             mcpMonitor.startPolling()
-            browserCommandExecutor.start(browserViewModel: browserViewModel)
+            browserCommandExecutor.start(browserViewModel: browserViewModel, appState: appState)
         }
         .onDisappear {
             mcpMonitor.stopPolling()

@@ -12,6 +12,9 @@ class AppState: ObservableObject {
     @Published var projectProfile: String?
     @Published var isProfileGenerating = false
 
+    // Browser overlay on home view (triggered by MCP browser commands)
+    @Published var showHomeBrowser = false
+
     enum GUITab: String, CaseIterable {
         case tasks = "Tasks"
         case notes = "Notes"

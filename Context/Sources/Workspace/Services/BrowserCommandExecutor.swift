@@ -9,6 +9,7 @@ class BrowserCommandExecutor: ObservableObject {
 
     private let db: DatabaseService
     private weak var browserViewModel: BrowserViewModel?
+    private weak var appState: AppState?
     private var pollTimer: Timer?
     private var cleanupTimer: Timer?
     private var isProcessing = false
@@ -19,8 +20,9 @@ class BrowserCommandExecutor: ObservableObject {
 
     /// Start polling for pending browser commands.
     /// Must be called after the BrowserViewModel is available.
-    func start(browserViewModel: BrowserViewModel) {
+    func start(browserViewModel: BrowserViewModel, appState: AppState? = nil) {
         self.browserViewModel = browserViewModel
+        self.appState = appState
         startPolling()
         startCleanupTimer()
     }
@@ -51,16 +53,36 @@ class BrowserCommandExecutor: ObservableObject {
         defer { isProcessing = false }
 
         let commands: [BrowserCommand]
+        let currentProjectId = appState?.currentProject?.id
+        let isHome = appState?.isHomeView ?? false
         do {
             commands = try await dbQueue.read { db in
-                try BrowserCommand
+                var request = BrowserCommand
                     .filter(Column("status") == "pending")
+                if isHome {
+                    // Home view: only pick up commands with no projectId
+                    request = request.filter(Column("projectId") == nil)
+                } else if let pid = currentProjectId {
+                    // Project view: only pick up commands matching this project
+                    request = request.filter(Column("projectId") == pid)
+                }
+                return try request
                     .order(Column("createdAt").asc)
                     .fetchAll(db)
             }
         } catch {
             print("BrowserCommandExecutor: poll error: \(error)")
             return
+        }
+
+        if !commands.isEmpty {
+            if let appState = appState {
+                if appState.isHomeView {
+                    appState.showHomeBrowser = true
+                } else if appState.selectedTab != .browser {
+                    appState.selectedTab = .browser
+                }
+            }
         }
 
         for command in commands {
