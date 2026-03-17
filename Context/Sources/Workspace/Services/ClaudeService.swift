@@ -8,6 +8,7 @@ class ClaudeService: ObservableObject {
     @Published var lastError: String?
 
     nonisolated(unsafe) private static var cachedClaudePath: String?
+    nonisolated(unsafe) private static var cachedShellEnv: [String: String]?
 
     // MARK: - Session Summary
 
@@ -376,56 +377,116 @@ class ClaudeService: ObservableObject {
         lastError = nil
         defer { isGenerating = false }
 
-        let result = await Task.detached {
+        let output = await Task.detached {
             Self.callClaude(prompt: prompt)
         }.value
 
-        if result == nil && lastError == nil {
-            lastError = "Failed to generate. Is the Claude Code CLI installed?"
+        if let error = output.error {
+            lastError = error
+            return nil
         }
 
-        return result
+        if output.result == nil || output.result!.isEmpty {
+            lastError = "Claude returned an empty response"
+            return nil
+        }
+
+        return output.result
     }
 
     // MARK: - Process (off main actor)
 
-    private nonisolated static func callClaude(prompt: String) -> String? {
-        guard let claudePath = findClaudeBinary() else { return nil }
+    /// Resolves the user's full shell environment (includes .zshrc/.zprofile exports
+    /// like ANTHROPIC_API_KEY that GUI apps don't inherit).
+    nonisolated static func resolvedShellEnvironment() -> [String: String] {
+        if let cached = cachedShellEnv { return cached }
+
+        let shell = ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh"
+        let process = Process()
+        let pipe = Pipe()
+        process.executableURL = URL(fileURLWithPath: shell)
+        process.arguments = ["-l", "-c", "env"]
+        process.standardOutput = pipe
+        process.standardError = FileHandle.nullDevice
+        process.environment = ProcessInfo.processInfo.environment
+
+        do {
+            try process.run()
+            let data = pipe.fileHandleForReading.readDataToEndOfFile()
+            process.waitUntilExit()
+
+            guard process.terminationStatus == 0,
+                  let output = String(data: data, encoding: .utf8) else {
+                return ProcessInfo.processInfo.environment
+            }
+
+            var env: [String: String] = [:]
+            for line in output.components(separatedBy: "\n") {
+                guard let eqIdx = line.firstIndex(of: "=") else { continue }
+                let key = String(line[line.startIndex..<eqIdx])
+                let value = String(line[line.index(after: eqIdx)...])
+                env[key] = value
+            }
+            cachedShellEnv = env
+            return env
+        } catch {
+            return ProcessInfo.processInfo.environment
+        }
+    }
+
+    /// Calls the Claude CLI and returns (stdout, errorDescription).
+    /// On success errorDescription is nil; on failure stdout is nil.
+    private nonisolated static func callClaude(prompt: String) -> (result: String?, error: String?) {
+        guard let claudePath = findClaudeCLI() else {
+            return (nil, "Claude CLI not found. Install with: npm install -g @anthropic-ai/claude-code")
+        }
 
         let process = Process()
         let outputPipe = Pipe()
+        let errorPipe = Pipe()
         let inputPipe = Pipe()
 
         process.executableURL = URL(fileURLWithPath: claudePath)
         process.arguments = ["-p", "--output-format", "text"]
         process.standardOutput = outputPipe
-        process.standardError = FileHandle.nullDevice
+        process.standardError = errorPipe
         process.standardInput = inputPipe
 
-        // Inherit environment for Max plan auth
-        process.environment = ProcessInfo.processInfo.environment
+        // Use full shell environment so API keys from .zshrc/.zprofile are available
+        process.environment = resolvedShellEnvironment()
 
-        guard let promptData = prompt.data(using: .utf8) else { return nil }
+        guard let promptData = prompt.data(using: .utf8) else {
+            return (nil, "Failed to encode prompt")
+        }
         inputPipe.fileHandleForWriting.write(promptData)
         inputPipe.fileHandleForWriting.closeFile()
 
         do {
             try process.run()
-            process.waitUntilExit()
         } catch {
-            return nil
+            return (nil, "Failed to launch Claude: \(error.localizedDescription)")
         }
 
-        guard process.terminationStatus == 0 else { return nil }
-
+        // Read output before waitUntilExit to avoid pipe buffer deadlock
         let data = outputPipe.fileHandleForReading.readDataToEndOfFile()
-        return String(data: data, encoding: .utf8)?
+        let errData = errorPipe.fileHandleForReading.readDataToEndOfFile()
+        process.waitUntilExit()
+
+        guard process.terminationStatus == 0 else {
+            let stderr = String(data: errData, encoding: .utf8)?
+                .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            return (nil, stderr.isEmpty ? "Claude exited with code \(process.terminationStatus)" : stderr)
+        }
+
+        let text = String(data: data, encoding: .utf8)?
             .trimmingCharacters(in: .whitespacesAndNewlines)
+        return (text, nil)
     }
 
     // MARK: - Binary Discovery
 
-    private nonisolated static func findClaudeBinary() -> String? {
+    /// Find the Claude CLI binary. Used by GitChangesView for commit message generation.
+    nonisolated static func findClaudeCLI() -> String? {
         if let cached = cachedClaudePath { return cached }
 
         let fm = FileManager.default

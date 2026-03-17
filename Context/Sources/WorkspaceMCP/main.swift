@@ -69,6 +69,22 @@ func openDatabase() throws -> DatabaseQueue {
         """)
     }
 
+    // Ensure uiCommands table exists for MCP-to-GUI IPC (commit messages, etc.)
+    try db.write { conn in
+        try conn.execute(sql: """
+            CREATE TABLE IF NOT EXISTS uiCommands (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                command TEXT NOT NULL,
+                args TEXT,
+                projectId TEXT,
+                status TEXT NOT NULL DEFAULT 'pending',
+                result TEXT,
+                createdAt DATETIME NOT NULL,
+                completedAt DATETIME
+            )
+        """)
+    }
+
     // Ensure indexes exist for common MCP query patterns
     try db.write { conn in
         try conn.execute(sql: "CREATE INDEX IF NOT EXISTS idx_taskItems_project_status ON taskItems(projectId, status)")
@@ -1675,6 +1691,19 @@ class MCPServer {
                     "required": [] as [String]
                 ]
             ],
+            // MARK: - UI Command Tools
+            [
+                "name": "set_commit_message",
+                "description": "ALWAYS use this tool when the user asks you to generate, write, or suggest a commit message. This writes the message directly into the Workspace app's commit message box. First review the staged diff (via git_diff with staged=true), then call this tool with the message. Do NOT just print the commit message — always use this tool so it appears in the UI.",
+                "inputSchema": [
+                    "type": "object",
+                    "properties": [
+                        "message": ["type": "string", "description": "The commit message to set in the UI"],
+                        "project_id": ["type": "string", "description": "Project ID (auto-detected if omitted)"]
+                    ],
+                    "required": ["message"]
+                ]
+            ],
             // MARK: - Network Inspection Tools
             [
                 "name": "get_network_requests",
@@ -1877,6 +1906,8 @@ class MCPServer {
             case "git_unstage":        result = try gitUnstage(args)
             case "git_commit":         result = try gitCommit(args)
             case "git_push":           result = try gitPush(args)
+            // UI command tools
+            case "set_commit_message":  result = try setCommitMessage(args)
             // Network inspection tools
             case "get_network_requests": result = try getNetworkRequests(args)
             case "get_request_detail":   result = try getRequestDetail(args)
@@ -3477,6 +3508,36 @@ class MCPServer {
         return result.output?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
             ? result.output!
             : "Pushed successfully"
+    }
+
+    // MARK: - UI Command Tool Implementations
+
+    func setCommitMessage(_ args: [String: Any]) throws -> String {
+        guard let message = args["message"] as? String, !message.isEmpty else {
+            throw MCPError(message: "message is required")
+        }
+
+        let projectId = try? resolveProjectId(args)
+
+        let argsJSON: String
+        if let data = try? JSONSerialization.data(withJSONObject: ["message": message]),
+           let str = String(data: data, encoding: .utf8) {
+            argsJSON = str
+        } else {
+            throw MCPError(message: "Failed to encode message")
+        }
+
+        try db.write { db in
+            try db.execute(
+                sql: """
+                    INSERT INTO uiCommands (command, args, projectId, status, createdAt)
+                    VALUES (?, ?, ?, 'pending', ?)
+                """,
+                arguments: ["set_commit_message", argsJSON, projectId, Date()]
+            )
+        }
+
+        return "Commit message set in the UI. The user can review and edit it before committing."
     }
 
     // MARK: - Network Inspection Tool Implementations

@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import GRDB
 
 struct GitChangesView: View {
     @EnvironmentObject var appState: AppState
@@ -22,6 +23,7 @@ struct GitChangesView: View {
     @State private var newBranchName = ""
     @State private var isCreatingBranch = false
     @State private var branchError: String?
+    @State private var uiCommandTimer: Timer?
     @State private var isGeneratingMessage = false
 
     var body: some View {
@@ -32,7 +34,13 @@ struct GitChangesView: View {
                 changesContent
             }
         }
-        .onAppear { scanProject() }
+        .onAppear {
+            scanProject()
+            startUICommandPolling()
+        }
+        .onDisappear {
+            stopUICommandPolling()
+        }
         .onChange(of: appState.currentProject?.id) { scanProject() }
         .alert("Push to Remote", isPresented: $showPushConfirm) {
             Button("Push") { performPush() }
@@ -937,84 +945,85 @@ struct GitChangesView: View {
         }
     }
 
+    // MARK: - UI Command Polling (MCP → GUI IPC)
+
+    private func startUICommandPolling() {
+        uiCommandTimer = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { [self] _ in
+            Task { @MainActor in
+                self.pollUICommands()
+            }
+        }
+    }
+
+    private func stopUICommandPolling() {
+        uiCommandTimer?.invalidate()
+        uiCommandTimer = nil
+    }
+
+    private func pollUICommands() {
+        guard let dbQueue = DatabaseService.shared.dbQueue,
+              let projectId = appState.currentProject?.id else { return }
+
+        struct UICommand: Codable, FetchableRecord, MutablePersistableRecord {
+            var id: Int64?
+            var command: String
+            var args: String?
+            var projectId: String?
+            var status: String
+            static let databaseTableName = "uiCommands"
+        }
+
+        do {
+            let commands: [UICommand] = try dbQueue.read { db in
+                try UICommand
+                    .filter(Column("status") == "pending")
+                    .filter(Column("projectId") == projectId)
+                    .filter(Column("command") == "set_commit_message")
+                    .order(Column("createdAt").asc)
+                    .fetchAll(db)
+            }
+
+            for cmd in commands {
+                if let argsStr = cmd.args,
+                   let argsData = argsStr.data(using: .utf8),
+                   let argsDict = try? JSONSerialization.jsonObject(with: argsData) as? [String: Any],
+                   let message = argsDict["message"] as? String {
+                    commitMessage = message
+                    isGeneratingMessage = false
+                }
+
+                // Mark as completed
+                try dbQueue.write { db in
+                    try db.execute(
+                        sql: "UPDATE uiCommands SET status = 'completed', completedAt = ? WHERE id = ?",
+                        arguments: [Date(), cmd.id]
+                    )
+                }
+            }
+        } catch {
+            // Silently ignore — table may not exist yet
+        }
+    }
+
+    // MARK: - AI Commit Message Generation
+
     private func generateCommitMessage() {
         guard let path = appState.currentProject?.path else { return }
         isGeneratingMessage = true
-        Task.detached {
-            // Get the staged diff
-            let diffSummary = GitChangesService.stagedDiffSummary(at: path)
 
-            // Find Claude binary
-            let fm = FileManager.default
-            let home = NSHomeDirectory()
-            let candidates = [
-                "/usr/local/bin/claude",
-                "/opt/homebrew/bin/claude",
-                "\(home)/.npm/bin/claude",
-                "\(home)/.local/bin/claude",
-                "\(home)/.nvm/current/bin/claude",
+        let prompt = "Use the workspace MCP: call git_diff with staged=true and path=\\\"\(path)\\\", then call set_commit_message with a concise commit message (under 72 chars first line, body only if needed). You MUST use set_commit_message, do not just print the message."
+
+        let command = "claude --dangerously-skip-permissions \"\(prompt)\""
+
+        NotificationCenter.default.post(
+            name: .launchTask,
+            object: nil,
+            userInfo: [
+                LaunchTaskKey.title: "Commit Message",
+                LaunchTaskKey.command: command,
+                LaunchTaskKey.projectId: appState.currentProject?.id ?? "",
             ]
-            var claudePath: String?
-            for candidate in candidates {
-                if fm.fileExists(atPath: candidate) {
-                    claudePath = candidate
-                    break
-                }
-            }
-
-            guard let binary = claudePath else {
-                await MainActor.run { isGeneratingMessage = false }
-                return
-            }
-
-            let prompt = """
-            Generate a concise git commit message for these changes. Return ONLY the commit message, nothing else. Use conventional commit style (e.g. "feat:", "fix:", "refactor:"). Keep it under 72 characters for the first line. If needed, add a blank line then a brief body.
-
-            \(diffSummary)
-            """
-
-            let process = Process()
-            let outputPipe = Pipe()
-            let inputPipe = Pipe()
-
-            process.executableURL = URL(fileURLWithPath: binary)
-            process.arguments = ["-p", "--output-format", "text"]
-            process.standardOutput = outputPipe
-            process.standardError = FileHandle.nullDevice
-            process.standardInput = inputPipe
-            process.environment = ProcessInfo.processInfo.environment
-
-            guard let promptData = prompt.data(using: .utf8) else {
-                await MainActor.run { isGeneratingMessage = false }
-                return
-            }
-            inputPipe.fileHandleForWriting.write(promptData)
-            inputPipe.fileHandleForWriting.closeFile()
-
-            do {
-                try process.run()
-                process.waitUntilExit()
-            } catch {
-                await MainActor.run { isGeneratingMessage = false }
-                return
-            }
-
-            guard process.terminationStatus == 0 else {
-                await MainActor.run { isGeneratingMessage = false }
-                return
-            }
-
-            let data = outputPipe.fileHandleForReading.readDataToEndOfFile()
-            let message = String(data: data, encoding: .utf8)?
-                .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-
-            await MainActor.run {
-                if !message.isEmpty {
-                    commitMessage = message
-                }
-                isGeneratingMessage = false
-            }
-        }
+        )
     }
 
     private func fileName(from path: String) -> String {

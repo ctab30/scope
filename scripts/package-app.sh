@@ -156,6 +156,18 @@ echo "Creating .zip archive..."
 ditto -c -k --sequesterRsrc --keepParent "$APP_BUNDLE" "$BUILD_DIR/$APP_NAME.zip"
 echo "  Archive: $(du -h "$BUILD_DIR/$APP_NAME.zip" | awk '{print $1}')"
 
+# Create .dmg for distribution
+echo "Creating .dmg installer..."
+DMG_PATH="$BUILD_DIR/$APP_NAME.dmg"
+DMG_TEMP="$BUILD_DIR/dmg_staging"
+rm -rf "$DMG_TEMP" "$DMG_PATH"
+mkdir -p "$DMG_TEMP"
+cp -R "$APP_BUNDLE" "$DMG_TEMP/"
+ln -s /Applications "$DMG_TEMP/Applications"
+hdiutil create -volname "$APP_NAME" -srcfolder "$DMG_TEMP" -ov -format UDZO "$DMG_PATH" >/dev/null 2>&1
+rm -rf "$DMG_TEMP"
+echo "  DMG: $(du -h "$DMG_PATH" | awk '{print $1}')"
+
 # Cleanup
 rm -rf "$ICON_WORK"
 
@@ -163,11 +175,12 @@ echo ""
 echo "=== Done ==="
 APP_SIZE=$(du -sh "$APP_BUNDLE" | awk '{print $1}')
 echo "  $APP_BUNDLE ($APP_SIZE)"
+echo "  $DMG_PATH ($(du -h "$DMG_PATH" | awk '{print $1}'))"
 echo ""
 echo "To install:"
-echo "  cp -r \"$APP_BUNDLE\" /Applications/"
+echo "  Open $APP_NAME.dmg and drag to Applications"
 echo ""
-echo "Or just double-click it in Finder:"
+echo "Or just double-click the .app in Finder:"
 echo "  open \"$BUILD_DIR\""
 echo ""
 echo "MCP server binary is at:"

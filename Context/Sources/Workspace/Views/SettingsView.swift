@@ -160,38 +160,9 @@ private struct TerminalSettingsTab: View {
 private struct ContextEngineSettingsTab: View {
     @ObservedObject var settings: AppSettings
     @EnvironmentObject var contextEngine: ContextEngine
-    @State private var apiKey: String = ClaudeService.openRouterAPIKey ?? ""
-    @State private var selectedChatModel: String = ClaudeService.openRouterModel
-
-    private let chatModels = [
-        ("google/gemini-3.1-pro-preview", "Gemini 3.1 Pro"),
-        ("google/gemini-3-flash-preview", "Gemini 3 Flash"),
-        ("qwen/qwen3.5-plus-02-15", "Qwen 3.5 Plus"),
-        ("qwen/qwen3-coder-next", "Qwen3 Coder Next"),
-        ("deepseek/deepseek-v3.2", "DeepSeek V3.2"),
-        ("minimax/minimax-m2.5", "MiniMax M2.5"),
-        ("z-ai/glm-5", "GLM-5"),
-        ("moonshotai/kimi-k2.5", "Kimi K2.5"),
-    ]
 
     var body: some View {
         Form {
-            Section("OpenRouter API") {
-                SecureField("API Key (sk-or-...)", text: $apiKey)
-                    .textFieldStyle(.roundedBorder)
-                    .onChange(of: apiKey) { _, val in
-                        ClaudeService.openRouterAPIKey = val.isEmpty ? nil : val
-                    }
-                HStack {
-                    Circle()
-                        .fill(apiKey.isEmpty ? Color.red : Color.green)
-                        .frame(width: 8, height: 8)
-                    Text(apiKey.isEmpty ? "No API key set" : "API key configured")
-                        .font(WorkspaceTheme.Font.footnote)
-                        .foregroundStyle(.secondary)
-                }
-            }
-
             Section("Code Search") {
                 Toggle("Enable context search", isOn: $settings.contextSearchEnabled)
 
@@ -231,21 +202,6 @@ private struct ContextEngineSettingsTab: View {
                     Button("Clear Index") { Task { await contextEngine.clearIndex() } }
                         .disabled(contextEngine.isIndexing)
                 }
-            }
-
-            Section("Chat Model") {
-                Picker("Model", selection: $selectedChatModel) {
-                    ForEach(chatModels, id: \.0) { (id, label) in
-                        Text(label).tag(id)
-                    }
-                }
-                .onChange(of: selectedChatModel) { _, newValue in
-                    ClaudeService.openRouterModel = newValue
-                }
-
-                Text("Used for the built-in chat. Same API key as above.")
-                    .font(WorkspaceTheme.Font.footnote)
-                    .foregroundStyle(.tertiary)
             }
 
             Section("Automation") {

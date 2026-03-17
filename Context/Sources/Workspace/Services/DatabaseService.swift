@@ -441,6 +441,19 @@ class DatabaseService {
             try db.create(index: "taskFileChanges_taskId", on: "taskFileChanges", columns: ["taskId"])
         }
 
+        migrator.registerMigration("v20_createUICommands") { db in
+            try db.create(table: "uiCommands", ifNotExists: true) { t in
+                t.autoIncrementedPrimaryKey("id")
+                t.column("command", .text).notNull()
+                t.column("args", .text)
+                t.column("projectId", .text)
+                t.column("status", .text).notNull().defaults(to: "pending")
+                t.column("result", .text)
+                t.column("createdAt", .datetime).notNull()
+                t.column("completedAt", .datetime)
+            }
+        }
+
         return migrator
     }
 }
