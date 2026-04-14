@@ -1838,6 +1838,88 @@ class MCPServer {
                     "required": ["task_id"]
                 ]
             ],
+            // Zendesk tools
+            [
+                "name": "zendesk_list_tickets",
+                "description": "List Zendesk tickets from a view. Defaults to the Product Engineering view. Returns ticket ID, subject, status, priority, requester, assignee.",
+                "inputSchema": [
+                    "type": "object",
+                    "properties": [
+                        "view_id": ["type": "integer", "description": "Zendesk view ID (default: Product Engineering view)"],
+                        "status": ["type": "string", "description": "Filter by status: new, open, pending, hold, solved, closed"],
+                    ]
+                ]
+            ],
+            [
+                "name": "zendesk_get_ticket",
+                "description": "Get full details of a Zendesk ticket including custom fields (Request Area, Issue Type, Scope, Urgency, System/Application), tags, and requester/assignee info.",
+                "inputSchema": [
+                    "type": "object",
+                    "properties": [
+                        "ticket_id": ["type": "integer", "description": "Ticket ID"],
+                    ],
+                    "required": ["ticket_id"]
+                ]
+            ],
+            [
+                "name": "zendesk_get_comments",
+                "description": "Get the conversation/comment history for a Zendesk ticket. Includes public replies and internal notes.",
+                "inputSchema": [
+                    "type": "object",
+                    "properties": [
+                        "ticket_id": ["type": "integer", "description": "Ticket ID"],
+                    ],
+                    "required": ["ticket_id"]
+                ]
+            ],
+            [
+                "name": "zendesk_reply",
+                "description": "Reply to a Zendesk ticket. Can send a public reply (visible to requester) or an internal note (agents only).",
+                "inputSchema": [
+                    "type": "object",
+                    "properties": [
+                        "ticket_id": ["type": "integer", "description": "Ticket ID"],
+                        "body": ["type": "string", "description": "Reply text"],
+                        "public": ["type": "boolean", "description": "true for public reply (default), false for internal note"],
+                    ],
+                    "required": ["ticket_id", "body"]
+                ]
+            ],
+            [
+                "name": "zendesk_update_status",
+                "description": "Update the status of a Zendesk ticket.",
+                "inputSchema": [
+                    "type": "object",
+                    "properties": [
+                        "ticket_id": ["type": "integer", "description": "Ticket ID"],
+                        "status": ["type": "string", "description": "New status: new, open, pending, hold, solved"],
+                    ],
+                    "required": ["ticket_id", "status"]
+                ]
+            ],
+            [
+                "name": "zendesk_assign",
+                "description": "Assign a Zendesk ticket to an agent.",
+                "inputSchema": [
+                    "type": "object",
+                    "properties": [
+                        "ticket_id": ["type": "integer", "description": "Ticket ID"],
+                        "assignee_id": ["type": "integer", "description": "Agent user ID to assign to (0 to unassign)"],
+                    ],
+                    "required": ["ticket_id", "assignee_id"]
+                ]
+            ],
+            [
+                "name": "zendesk_search",
+                "description": "Search Zendesk tickets by query string.",
+                "inputSchema": [
+                    "type": "object",
+                    "properties": [
+                        "query": ["type": "string", "description": "Search query (Zendesk search syntax)"],
+                    ],
+                    "required": ["query"]
+                ]
+            ],
         ]
     }
 
@@ -1921,6 +2003,14 @@ class MCPServer {
             case "get_next_task":      result = try getNextTask(args)
             case "search_tasks":       result = try searchTasks(args)
             case "complete_task":      result = try completeTask(args)
+            // Zendesk tools
+            case "zendesk_list_tickets":  result = try zendeskListTickets(args)
+            case "zendesk_get_ticket":    result = try zendeskGetTicket(args)
+            case "zendesk_get_comments":  result = try zendeskGetComments(args)
+            case "zendesk_reply":         result = try zendeskReply(args)
+            case "zendesk_update_status": result = try zendeskUpdateStatus(args)
+            case "zendesk_assign":        result = try zendeskAssign(args)
+            case "zendesk_search":        result = try zendeskSearch(args)
             default:
                 return errorResponse(id: req.id, code: -32602, message: "Unknown tool: \(toolName)")
             }
@@ -3013,6 +3103,23 @@ class MCPServer {
             }
         }
         return lines.joined(separator: "\n")
+    }
+
+    /// Looks up a client by name (case-insensitive). Creates one if not found.
+    func resolveOrCreateClient(name: String, inDb db: Database) throws -> Client {
+        if let existing = try Client.filter(Column("name").collating(.nocase) == name).fetchOne(db) {
+            return existing
+        }
+        let count = try Client.fetchCount(db)
+        var client = Client(
+            id: UUID().uuidString,
+            name: name,
+            color: "#3B82F6",
+            sortOrder: count,
+            createdAt: Date()
+        )
+        try client.insert(db)
+        return client
     }
 
     // MARK: - Client Handlers
@@ -4254,6 +4361,284 @@ class MCPServer {
            let str = String(data: data, encoding: .utf8) {
             FileHandle.standardOutput.write((str + "\n").data(using: .utf8)!)
         }
+    }
+
+    // MARK: - Zendesk API
+
+    private static let zendeskBaseURL = "https://iprosystemssupport.zendesk.com/api/v2"
+    private static let productEngineeringViewId = 46807113687963
+
+    // Well-known custom field IDs
+    private static let zendeskFields: [(Int, String)] = [
+        (45899209917339, "Request Area"),
+        (45905903171995, "Issue Type"),
+        (45906480974875, "System / Application"),
+        (45906589672347, "Urgency"),
+        (45906931657115, "Scope"),
+    ]
+
+    private func zendeskAuth() throws -> String {
+        let credURL = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)
+            .first!.appendingPathComponent("Workspace/.credentials.json")
+        guard let data = try? Data(contentsOf: credURL),
+              let creds = try? JSONDecoder().decode([String: String].self, from: data),
+              let email = creds["zendesk_email"]?.trimmingCharacters(in: .whitespaces),
+              let token = creds["zendesk_api_token"]?.trimmingCharacters(in: .whitespaces),
+              !email.isEmpty, !token.isEmpty else {
+            throw MCPError(message: "Zendesk not configured. Add email and API token in Workspace Settings > Zendesk.")
+        }
+        let credentials = "\(email)/token:\(token)"
+        return "Basic " + Data(credentials.utf8).base64EncodedString()
+    }
+
+    private func zendeskGet(_ path: String) throws -> Data {
+        let auth = try zendeskAuth()
+        let urlStr = path.hasPrefix("http") ? path : Self.zendeskBaseURL + path
+        guard let url = URL(string: urlStr) else { throw MCPError(message: "Invalid URL: \(urlStr)") }
+
+        var request = URLRequest(url: url)
+        request.setValue(auth, forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        let semaphore = DispatchSemaphore(value: 0)
+        var resultData: Data?
+        var resultError: Error?
+
+        URLSession.shared.dataTask(with: request) { data, response, error in
+            if let error { resultError = error }
+            else if let http = response as? HTTPURLResponse, http.statusCode != 200 {
+                resultError = MCPError(message: "Zendesk API error: HTTP \(http.statusCode)")
+            } else {
+                resultData = data
+            }
+            semaphore.signal()
+        }.resume()
+
+        semaphore.wait()
+        if let error = resultError { throw error }
+        guard let data = resultData else { throw MCPError(message: "No response from Zendesk") }
+        return data
+    }
+
+    private func zendeskPut(_ path: String, payload: [String: Any]) throws -> Data {
+        let auth = try zendeskAuth()
+        let urlStr = Self.zendeskBaseURL + path
+        guard let url = URL(string: urlStr),
+              let body = try? JSONSerialization.data(withJSONObject: payload) else {
+            throw MCPError(message: "Invalid request")
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "PUT"
+        request.setValue(auth, forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = body
+
+        let semaphore = DispatchSemaphore(value: 0)
+        var resultData: Data?
+        var resultError: Error?
+
+        URLSession.shared.dataTask(with: request) { data, response, error in
+            if let error { resultError = error }
+            else if let http = response as? HTTPURLResponse, http.statusCode != 200 {
+                resultError = MCPError(message: "Zendesk update failed: HTTP \(http.statusCode)")
+            } else {
+                resultData = data
+            }
+            semaphore.signal()
+        }.resume()
+
+        semaphore.wait()
+        if let error = resultError { throw error }
+        return resultData ?? Data()
+    }
+
+    private func zendeskResolveUser(_ userId: Int) -> String {
+        guard let data = try? zendeskGet("/users/\(userId).json"),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let user = json["user"] as? [String: Any] else { return "Unknown" }
+        return user["name"] as? String ?? user["email"] as? String ?? "Unknown"
+    }
+
+    private func formatTicket(_ t: [String: Any]) -> String {
+        let id = t["id"] as? Int ?? 0
+        let subject = t["subject"] as? String ?? "(no subject)"
+        let status = t["status"] as? String ?? "?"
+        let priority = t["priority"] as? String ?? "none"
+        let requesterId = t["requester_id"] as? Int
+        let assigneeId = t["assignee_id"] as? Int
+        let createdAt = t["created_at"] as? String ?? ""
+        let updatedAt = t["updated_at"] as? String ?? ""
+
+        var lines = [
+            "Ticket #\(id): \(subject)",
+            "Status: \(status) | Priority: \(priority)",
+            "Requester: \(requesterId.map { zendeskResolveUser($0) } ?? "Unknown")",
+            "Assignee: \(assigneeId.map { zendeskResolveUser($0) } ?? "Unassigned")",
+            "Created: \(createdAt) | Updated: \(updatedAt)",
+        ]
+
+        // Custom fields
+        if let customFields = t["custom_fields"] as? [[String: Any]] {
+            for (fieldId, fieldName) in Self.zendeskFields {
+                if let field = customFields.first(where: { ($0["id"] as? Int) == fieldId }),
+                   let value = field["value"] as? String, !value.isEmpty {
+                    lines.append("\(fieldName): \(value.replacingOccurrences(of: "_", with: " "))")
+                }
+            }
+        }
+
+        // Tags
+        if let tags = t["tags"] as? [String], !tags.isEmpty {
+            lines.append("Tags: \(tags.joined(separator: ", "))")
+        }
+
+        return lines.joined(separator: "\n")
+    }
+
+    // MARK: - Zendesk Tool Implementations
+
+    func zendeskListTickets(_ args: [String: Any]) throws -> String {
+        let viewId = args["view_id"] as? Int ?? Self.productEngineeringViewId
+        let data = try zendeskGet("/views/\(viewId)/tickets.json")
+        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let tickets = json["tickets"] as? [[String: Any]] else {
+            return "No tickets found"
+        }
+
+        var filtered = tickets
+        if let status = args["status"] as? String {
+            filtered = tickets.filter { ($0["status"] as? String) == status }
+        }
+
+        if filtered.isEmpty { return "No tickets found" }
+
+        let lines = filtered.map { t -> String in
+            let id = t["id"] as? Int ?? 0
+            let subject = t["subject"] as? String ?? ""
+            let status = t["status"] as? String ?? "?"
+            let priority = t["priority"] as? String ?? ""
+            return "#\(id) [\(status)] \(priority) — \(subject)"
+        }
+
+        return "Found \(filtered.count) tickets:\n\n" + lines.joined(separator: "\n")
+    }
+
+    func zendeskGetTicket(_ args: [String: Any]) throws -> String {
+        guard let ticketId = args["ticket_id"] as? Int else {
+            throw MCPError(message: "ticket_id is required")
+        }
+        let data = try zendeskGet("/tickets/\(ticketId).json")
+        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let ticket = json["ticket"] as? [String: Any] else {
+            throw MCPError(message: "Ticket #\(ticketId) not found")
+        }
+        return formatTicket(ticket)
+    }
+
+    func zendeskGetComments(_ args: [String: Any]) throws -> String {
+        guard let ticketId = args["ticket_id"] as? Int else {
+            throw MCPError(message: "ticket_id is required")
+        }
+        let data = try zendeskGet("/tickets/\(ticketId)/comments.json")
+        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let comments = json["comments"] as? [[String: Any]] else {
+            return "No comments found"
+        }
+
+        let formatted = comments.map { c -> String in
+            let authorId = c["author_id"] as? Int
+            let author = authorId.map { zendeskResolveUser($0) } ?? "Unknown"
+            let body = c["body"] as? String ?? ""
+            let createdAt = c["created_at"] as? String ?? ""
+            let isPublic = c["public"] as? Bool ?? true
+            let visibility = isPublic ? "Public" : "Internal"
+
+            return "[\(visibility)] \(author) (\(createdAt)):\n\(body)"
+        }
+
+        return "Ticket #\(ticketId) — \(comments.count) comments:\n\n" + formatted.joined(separator: "\n\n---\n\n")
+    }
+
+    func zendeskReply(_ args: [String: Any]) throws -> String {
+        guard let ticketId = args["ticket_id"] as? Int else {
+            throw MCPError(message: "ticket_id is required")
+        }
+        guard let body = args["body"] as? String, !body.isEmpty else {
+            throw MCPError(message: "body is required")
+        }
+        let isPublic = args["public"] as? Bool ?? true
+
+        let payload: [String: Any] = [
+            "ticket": [
+                "comment": [
+                    "body": body,
+                    "public": isPublic,
+                ]
+            ]
+        ]
+
+        _ = try zendeskPut("/tickets/\(ticketId).json", payload: payload)
+        return isPublic
+            ? "Public reply sent on ticket #\(ticketId)"
+            : "Internal note added to ticket #\(ticketId)"
+    }
+
+    func zendeskUpdateStatus(_ args: [String: Any]) throws -> String {
+        guard let ticketId = args["ticket_id"] as? Int else {
+            throw MCPError(message: "ticket_id is required")
+        }
+        guard let status = args["status"] as? String else {
+            throw MCPError(message: "status is required (new, open, pending, hold, solved)")
+        }
+
+        let payload: [String: Any] = ["ticket": ["status": status]]
+        _ = try zendeskPut("/tickets/\(ticketId).json", payload: payload)
+        return "Ticket #\(ticketId) status updated to \(status)"
+    }
+
+    func zendeskAssign(_ args: [String: Any]) throws -> String {
+        guard let ticketId = args["ticket_id"] as? Int else {
+            throw MCPError(message: "ticket_id is required")
+        }
+        guard let assigneeId = args["assignee_id"] as? Int else {
+            throw MCPError(message: "assignee_id is required")
+        }
+
+        let payload: [String: Any] = ["ticket": ["assignee_id": assigneeId]]
+        _ = try zendeskPut("/tickets/\(ticketId).json", payload: payload)
+
+        if assigneeId == 0 {
+            return "Ticket #\(ticketId) unassigned"
+        }
+        let name = zendeskResolveUser(assigneeId)
+        return "Ticket #\(ticketId) assigned to \(name)"
+    }
+
+    func zendeskSearch(_ args: [String: Any]) throws -> String {
+        guard let query = args["query"] as? String, !query.isEmpty else {
+            throw MCPError(message: "query is required")
+        }
+        guard let encoded = query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) else {
+            throw MCPError(message: "Invalid query")
+        }
+
+        let data = try zendeskGet("/search.json?query=type:ticket \(encoded)")
+        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let results = json["results"] as? [[String: Any]] else {
+            return "No results found"
+        }
+
+        if results.isEmpty { return "No tickets matched '\(query)'" }
+
+        let lines = results.map { t -> String in
+            let id = t["id"] as? Int ?? 0
+            let subject = t["subject"] as? String ?? ""
+            let status = t["status"] as? String ?? "?"
+            return "#\(id) [\(status)] — \(subject)"
+        }
+
+        return "Found \(results.count) tickets:\n\n" + lines.joined(separator: "\n")
     }
 }
 
