@@ -718,6 +718,10 @@ class MCPServer {
     /// Resolves project_id from args or falls back to auto-detected project.
     func resolveProjectId(_ args: [String: Any]) throws -> String {
         if let explicit = args["project_id"] as? String {
+            // Normalize "global" shorthand to the sentinel ID
+            if explicit.lowercased() == "global" || explicit == "__global__" {
+                return "__global__"
+            }
             return explicit
         }
         guard let detected = detectedProjectId else {
@@ -2226,12 +2230,27 @@ class MCPServer {
     }
 
     func listProjects() throws -> String {
-        let projects = try db.read { db in
-            try Project.fetchAll(db)
+        let (projects, clients) = try db.read { db in
+            let projects = try Project.fetchAll(db)
+            let clients = try Client.fetchAll(db)
+            return (projects, clients)
         }
+        let clientMap = Dictionary(uniqueKeysWithValues: clients.map { ($0.id, $0.name) })
+
         var lines = ["Projects (\(projects.count)):"]
-        for p in projects {
-            lines.append("  [\(p.id)] \(p.name) — \(p.path)")
+        // Show Global first
+        lines.append("  [__global__] Global (for tasks not tied to a specific project)")
+
+        for p in projects where p.id != "__global__" {
+            var info = "  [\(p.id)] \(p.name) — \(p.path)"
+            if let cid = p.clientId, let cname = clientMap[cid] {
+                info += " (group: \(cname))"
+            }
+            let tags = p.tagsArray
+            if !tags.isEmpty {
+                info += " [\(tags.joined(separator: ", "))]"
+            }
+            lines.append(info)
         }
         return lines.joined(separator: "\n")
     }
