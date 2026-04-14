@@ -2236,12 +2236,13 @@ class MCPServer {
             return (projects, clients)
         }
         let clientMap = Dictionary(uniqueKeysWithValues: clients.map { ($0.id, $0.name) })
+        let realProjects = projects.filter { $0.id != "__global__" }
 
-        var lines = ["Projects (\(projects.count)):"]
+        var lines = ["Projects (\(realProjects.count + 1)):"]
         // Show Global first
         lines.append("  [__global__] Global (for tasks not tied to a specific project)")
 
-        for p in projects where p.id != "__global__" {
+        for p in realProjects {
             var info = "  [\(p.id)] \(p.name) — \(p.path)"
             if let cid = p.clientId, let cname = clientMap[cid] {
                 info += " (group: \(cname))"
@@ -3242,10 +3243,11 @@ class MCPServer {
             return existing
         }
         let count = try Client.fetchCount(db)
+        let colors = ["#3B82F6", "#10B981", "#F59E0B", "#EF4444", "#8B5CF6", "#EC4899", "#06B6D4"]
         var client = Client(
             id: UUID().uuidString,
             name: name,
-            color: "#3B82F6",
+            color: colors[count % colors.count],
             sortOrder: count,
             createdAt: Date()
         )
