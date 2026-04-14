@@ -138,11 +138,30 @@ struct TaskNote: Codable, FetchableRecord, MutablePersistableRecord {
     }
 }
 
-struct Project: Codable, FetchableRecord, TableRecord {
+struct Project: Codable, FetchableRecord, MutablePersistableRecord {
     var id: String
     var name: String
     var path: String
+    var clientId: String?
+    var tags: String? // JSON array
     static let databaseTableName = "projects"
+
+    var tagsArray: [String] {
+        guard let json = tags,
+              let data = json.data(using: .utf8),
+              let array = try? JSONDecoder().decode([String].self, from: data)
+        else { return [] }
+        return array
+    }
+
+    mutating func setTags(_ newTags: [String]) {
+        if newTags.isEmpty {
+            tags = nil
+        } else if let data = try? JSONEncoder().encode(newTags),
+                  let str = String(data: data, encoding: .utf8) {
+            tags = str
+        }
+    }
 }
 
 struct Note: Codable, FetchableRecord, MutablePersistableRecord {
@@ -1081,14 +1100,29 @@ class MCPServer {
             ],
             [
                 "name": "create_project",
-                "description": "Register a new project in Workspace. Use when the current working directory is not tracked. Enables task tracking, notes, and context for the project.",
+                "description": "Register a new project in Workspace. Use when the current working directory is not tracked. Enables task tracking, notes, and context for the project. Optionally assign to a group and add tags.",
                 "inputSchema": [
                     "type": "object",
                     "properties": [
                         "name": ["type": "string", "description": "Project name"],
                         "path": ["type": "string", "description": "Absolute path to the project root (defaults to current working directory)"],
+                        "group_name": ["type": "string", "description": "Name of the group to assign this project to. Auto-creates the group if it doesn't exist."],
+                        "tags": ["type": "array", "items": ["type": "string"], "description": "Tags for the project (e.g. [\"mobile\", \"ios\"])"],
                     ],
                     "required": ["name"]
+                ]
+            ],
+            [
+                "name": "update_project",
+                "description": "Update a project's group or tags. Use to organize projects in the sidebar.",
+                "inputSchema": [
+                    "type": "object",
+                    "properties": [
+                        "project_id": ["type": "string", "description": "Project ID to update"],
+                        "group_name": ["type": "string", "description": "Group name to assign to. Empty string removes from group. Auto-creates group if needed."],
+                        "tags": ["type": "array", "items": ["type": "string"], "description": "Replace project tags (e.g. [\"mobile\", \"ios\"])"],
+                    ],
+                    "required": ["project_id"]
                 ]
             ],
             [
@@ -1939,6 +1973,7 @@ class MCPServer {
             case "get_project_context": result = try getProjectContext()
             case "list_projects":    result = try listProjects()
             case "create_project":   result = try createProject(args)
+            case "update_project":  result = try updateProject(args)
             case "list_tasks":       result = try listTasks(args)
             case "get_task":         result = try getTask(args)
             case "create_task":      result = try createTask(args)
@@ -2207,31 +2242,108 @@ class MCPServer {
         }
         let rawPath = args["path"] as? String ?? ""
         let path = rawPath.isEmpty ? workingDirectory : rawPath
+        let groupName = args["group_name"] as? String
+        let tagsArr = args["tags"] as? [String]
 
-        // Check-and-insert in a single write transaction to prevent TOCTOU race
         let projectId = UUID().uuidString
-        let (project, wasExisting) = try db.write { db -> (Project, Bool) in
-            if let existing = try Project.filter(Column("path") == path).fetchOne(db) {
-                return (existing, true)
+        let (project, wasExisting, clientName) = try db.write { db -> (Project, Bool, String?) in
+            var resolvedClient: Client? = nil
+            if let gn = groupName, !gn.isEmpty {
+                resolvedClient = try resolveOrCreateClient(name: gn, inDb: db)
             }
+
+            if var existing = try Project.filter(Column("path") == path).fetchOne(db) {
+                // Update group/tags on existing project if provided
+                if let client = resolvedClient {
+                    existing.clientId = client.id
+                }
+                if let tags = tagsArr {
+                    existing.setTags(tags)
+                }
+                if resolvedClient != nil || tagsArr != nil {
+                    try existing.update(db)
+                }
+                return (existing, true, resolvedClient?.name)
+            }
+
+            var tagJson: String? = nil
+            if let tags = tagsArr, !tags.isEmpty,
+               let data = try? JSONEncoder().encode(tags),
+               let str = String(data: data, encoding: .utf8) {
+                tagJson = str
+            }
+
             try db.execute(
-                sql: "INSERT INTO projects (id, name, path) VALUES (?, ?, ?)",
-                arguments: [projectId, name, path]
+                sql: "INSERT INTO projects (id, name, path, clientId, tags, createdAt) VALUES (?, ?, ?, ?, ?, ?)",
+                arguments: [projectId, name, path, resolvedClient?.id, tagJson, Date()]
             )
             guard let created = try Project.filter(Column("id") == projectId).fetchOne(db) else {
                 throw MCPError(message: "Failed to create project")
             }
-            return (created, false)
+            return (created, false, resolvedClient?.name)
         }
 
         detectedProjectId = project.id
         detectedProjectName = project.name
 
+        var extras: [String] = []
+        if let cn = clientName { extras.append("group: \(cn)") }
+        if let tags = tagsArr, !tags.isEmpty { extras.append("tags: \(tags.joined(separator: ", "))") }
+        let suffix = extras.isEmpty ? "" : " (\(extras.joined(separator: ", ")))"
+
         if wasExisting {
-            return "Project already exists: [\(project.id)] \(project.name) — \(project.path)\nNow using this project for the session."
+            return "Project already exists: [\(project.id)] \(project.name) — \(project.path)\(suffix)\nNow using this project for the session."
         } else {
-            return "Created project: [\(project.id)] \(project.name) — \(project.path)\nNow using this project for the session. You can create tasks and notes for it."
+            return "Created project: [\(project.id)] \(project.name) — \(project.path)\(suffix)\nNow using this project for the session."
         }
+    }
+
+    func updateProject(_ args: [String: Any]) throws -> String {
+        guard let projectId = args["project_id"] as? String, !projectId.isEmpty else {
+            throw MCPError(message: "project_id is required")
+        }
+        let groupName = args["group_name"] as? String
+        let tagsArr = args["tags"] as? [String]
+
+        if groupName == nil && tagsArr == nil {
+            throw MCPError(message: "At least one of group_name or tags must be provided")
+        }
+
+        let (project, clientName) = try db.write { db -> (Project, String?) in
+            guard var project = try Project.filter(Column("id") == projectId).fetchOne(db) else {
+                throw MCPError(message: "Project not found: \(projectId)")
+            }
+
+            var resolvedClientName: String? = nil
+
+            if let gn = groupName {
+                if gn.isEmpty {
+                    project.clientId = nil
+                } else {
+                    let client = try resolveOrCreateClient(name: gn, inDb: db)
+                    project.clientId = client.id
+                    resolvedClientName = client.name
+                }
+            }
+
+            if let tags = tagsArr {
+                project.setTags(tags)
+            }
+
+            try project.update(db)
+            return (project, resolvedClientName)
+        }
+
+        var parts: [String] = ["Updated project: [\(project.id)] \(project.name)"]
+        if let cn = clientName {
+            parts.append("Group: \(cn)")
+        } else if groupName == "" {
+            parts.append("Removed from group")
+        }
+        if let tags = tagsArr {
+            parts.append("Tags: \(tags.isEmpty ? "none" : tags.joined(separator: ", "))")
+        }
+        return parts.joined(separator: "\n")
     }
 
     func listTasks(_ args: [String: Any]) throws -> String {
